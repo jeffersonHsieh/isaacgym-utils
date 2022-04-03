@@ -10,7 +10,7 @@ scene:
     substeps: 2
     up_axis: z
     type: physx
-    use_gpu_pipeline: True
+    use_gpu_pipeline: False
     physx:
       solver_type: 1
       num_position_iterations: 8
@@ -19,7 +19,7 @@ scene:
       contact_offset: 0.001
       friction_offset_threshold: 0.001
       friction_correlation_distance: 0.0005
-      use_gpu: True
+      use_gpu: False
     device:
       compute: 0
       graphics: 0

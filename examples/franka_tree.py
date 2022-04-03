@@ -6,16 +6,17 @@ from autolab_core import YamlConfig, RigidTransform
 from isaacgym import gymapi
 from isaacgym_utils.scene import GymScene
 from isaacgym_utils.assets import GymFranka, GymBoxAsset
+from isaacgym_utils.assets import GymTree
 from isaacgym_utils.camera import GymCamera
-from isaacgym_utils.math_utils import RigidTransform_to_transform
-from isaacgym_utils.policy import GraspBlockPolicy
+from isaacgym_utils.math_utils import RigidTransform_to_transform, np_to_vec3, vec3_to_np
+from isaacgym_utils.policy import GraspBlockPolicy, MoveBlockPolicy
 from isaacgym_utils.draw import draw_transforms, draw_contacts, draw_camera
 
 import pdb
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument('--cfg', '-c', type=str, default='cfg/franka_pick_block.yaml')
+    parser.add_argument('--cfg', '-c', type=str, default='cfg/franka_tree.yaml')
     args = parser.parse_args()
     cfg = YamlConfig(args.cfg)
 
@@ -26,6 +27,7 @@ if __name__ == "__main__":
                         asset_options=cfg['table']['asset_options']
                         )
     franka = GymFranka(cfg['franka'], scene, actuation_mode='torques')
+    tree = GymTree(cfg['tree'], scene)
     block = GymBoxAsset(scene, **cfg['block']['dims'], 
                         shape_props=cfg['block']['shape_props'], 
                         rb_props=cfg['block']['rb_props'],
@@ -34,9 +36,11 @@ if __name__ == "__main__":
 
     table_transform = gymapi.Transform(p=gymapi.Vec3(cfg['table']['dims']['sx']/3, 0, cfg['table']['dims']['sz']/2))
     franka_transform = gymapi.Transform(p=gymapi.Vec3(0, 0, cfg['table']['dims']['sz'] + 0.01))
+
+    tree_transform = gymapi.Transform(p=gymapi.Vec3(1, 1, 0))
     
 
-    table_name, franka_name, block_name = 'table', 'franka', 'block'
+    table_name, franka_name, block_name, tree_name = 'table', 'franka', 'block', 'tree'
 
 
     cam = GymCamera(scene, cam_props=cfg['camera'])
@@ -48,8 +52,13 @@ if __name__ == "__main__":
 
     def setup(scene, _):
         scene.add_asset(table_name, table, table_transform)
-        scene.add_asset(franka_name, franka, franka_transform, collision_filter=1) # avoid self-collisions
         scene.add_asset(block_name, block, gymapi.Transform()) # we'll sample block poses later
+
+        scene.add_asset(franka_name, franka, franka_transform, collision_filter=1) # avoid self-collisions
+
+        scene.add_asset(tree_name, tree, tree_transform, collision_filter=1) # avoid self-collisions
+
+ 
         scene.attach_camera(cam_name, cam, franka_name, 'panda_hand', offset_transform=cam_offset_transform)
     scene.setup_all_envs(setup)    
 
@@ -63,14 +72,21 @@ if __name__ == "__main__":
             ee_transform_3 = franka.get_ee_transform_MARK(env_idx, franka_name, 'panda_link3')
             ee_transform_4 = franka.get_ee_transform_MARK(env_idx, franka_name, 'panda_link4')
             
+            tree_tf1 = tree.get_link_transform(env_idx, tree_name, 'link1')
+            tree_tf2 = tree.get_link_transform(env_idx, tree_name, 'link2')
+            tree_tf3 = tree.get_link_transform(env_idx, tree_name, 'leaf1')
 
-            transforms = [ee_transform, ee_transform_0, ee_transform_1, ee_transform_2, ee_transform_3, ee_transform_4, ee_transform_8]
+            transforms = [ee_transform, ee_transform_0, ee_transform_1, ee_transform_2, ee_transform_3, ee_transform_4, ee_transform_8, tree_tf1, tree_tf2, tree_tf3]
             draw_transforms(scene, [env_idx], transforms)
             cam_transform = cam.get_transform(env_idx, cam_name)
             draw_camera(scene, [env_idx], cam_transform, length=0.04)
         draw_contacts(scene, scene.env_idxs)
 
-    policy = GraspBlockPolicy(franka, franka_name, block, block_name)
+
+
+    # policy = GraspBlockPolicy(franka, franka_name, block, block_name)
+    policy = MoveBlockPolicy(franka, franka_name, block, block_name)
+
 
     while True:
         # sample block poses
@@ -88,3 +104,4 @@ if __name__ == "__main__":
         policy.reset()
         print(f"running scene again")
         scene.run(time_horizon=policy.time_horizon, policy=policy, custom_draws=custom_draws)
+        # scene.run(policy=policy, custom_draws=custom_draws)

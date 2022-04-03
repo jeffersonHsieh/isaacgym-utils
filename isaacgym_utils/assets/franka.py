@@ -91,6 +91,13 @@ class GymFranka(GymURDFAsset):
             ee_transform = ee_transform * self._gripper_offset * self._ee_tool_offset
         return ee_transform
 
+    def get_ee_transform_MARK(self, env_idx, name, link_name, offset=True):
+        ee_transform = self.get_rb_transform(env_idx, name, link_name)
+        if offset:
+            ee_transform = ee_transform 
+        return ee_transform
+
+
     def get_ee_rigid_transform(self, env_idx, name, offset=True):
         return transform_to_RigidTransform(self.get_ee_transform(env_idx, name, offset=offset),
                                                 from_frame='panda_ee', to_frame='panda_link0')

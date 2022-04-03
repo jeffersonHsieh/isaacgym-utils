@@ -245,6 +245,9 @@ class GymScene:
 
         asset.set_shape_props(env_idx, name)
         asset.set_rb_props(env_idx, name)
+        # print(f" ------------------- inside add asset function ------------------- ")
+        # print(f"env_idx, name: {env_idx, name}")
+        # print(f"ah map: {self.ah_map[env_idx][name] }")
         asset.set_dof_props(env_idx, name)
 
         self.seg_id_map[env_idx][name] = self._seg_ids[env_idx]

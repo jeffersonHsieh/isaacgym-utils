@@ -35,6 +35,70 @@ class RandomDeltaJointPolicy(Policy):
         self._franka.apply_delta_joint_targets(env_idx, self._name, delta_joints)
 
 
+class MoveBlockPolicy(Policy):
+
+    def __init__(self, franka, franka_name, block, block_name, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._franka = franka
+        self._franka_name = franka_name
+        self._block = block
+        self._block_name = block_name
+
+        self._time_horizon = 1000
+
+        self.reset()
+
+    def reset(self):
+        self._pre_grasp_transforms = []
+        self._grasp_transforms = []
+        self._init_ee_transforms = []
+        self._ee_waypoint_policies = []
+
+    def __call__(self, scene, env_idx, t_step, t_sim):
+        ee_transform = self._franka.get_ee_transform(env_idx, self._franka_name)
+
+        if t_step == 0:
+            self._init_ee_transforms.append(ee_transform)
+            self._ee_waypoint_policies.append(
+                EEImpedanceWaypointPolicy(self._franka, self._franka_name, ee_transform, ee_transform, T=20)
+            )
+
+        if t_step == 20:
+            block_transform = self._block.get_rb_transforms(env_idx, self._block_name)[0]
+            grasp_transform = gymapi.Transform(p=block_transform.p, r=self._init_ee_transforms[env_idx].r)
+            pre_grasp_transfrom = gymapi.Transform(p=grasp_transform.p + gymapi.Vec3(0, 0, 0.2), r=grasp_transform.r)
+
+            self._grasp_transforms.append(grasp_transform)
+            self._pre_grasp_transforms.append(pre_grasp_transfrom)
+
+            self._ee_waypoint_policies[env_idx] = \
+                EEImpedanceWaypointPolicy(
+                    self._franka, self._franka_name, ee_transform, self._pre_grasp_transforms[env_idx], T=180
+                )
+            print(f"------------- move 1 ------------- ")
+
+        if t_step == 200:
+            self._ee_waypoint_policies[env_idx] = \
+                EEImpedanceWaypointPolicy(
+                    self._franka, self._franka_name, self._pre_grasp_transforms[env_idx], self._grasp_transforms[env_idx], T=100
+                )
+            print(f"------------- move 2 ------------- ")
+
+        if t_step == 300:
+            block_transform = self._block.get_rb_transforms(env_idx, self._block_name)[0]
+            loc = block_transform.p
+
+            force = np_to_vec3([-np.sin(t_sim), 0, 0])
+
+            self._block.apply_force(env_idx, self._block_name, 'box', force, loc)
+
+            print(f"------------- move 3 ------------- ")
+
+
+        self._ee_waypoint_policies[env_idx](scene, env_idx, t_step, t_sim)
+
+   
+
 class GraspBlockPolicy(Policy):
 
     def __init__(self, franka, franka_name, block, block_name, *args, **kwargs):

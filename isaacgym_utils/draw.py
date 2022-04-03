@@ -12,7 +12,7 @@ def draw_contacts(scene, env_idxs):
             scene.gym.draw_env_rigid_contacts(scene.viewer, env_ptr, force_vector_color, contact_draw_scale, False)
 
 
-def draw_transforms(scene, env_idxs, transforms, length=0.05):
+def draw_transforms(scene, env_idxs, transforms, length=0.5):
     axes_geom = AxesGeometry(length)
     for env_idx in env_idxs:
         env_ptr = scene.env_ptrs[env_idx]

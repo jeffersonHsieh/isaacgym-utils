@@ -7,6 +7,7 @@ from isaacgym_utils.scene import GymScene
 from isaacgym_utils.assets import GymFranka, GymBoxAsset
 from isaacgym_utils.policy import RandomDeltaJointPolicy
 from isaacgym_utils.draw import draw_transforms
+from isaacgym_utils.math_utils import *
 
 
 if __name__ == "__main__":
@@ -39,7 +40,17 @@ if __name__ == "__main__":
             ]
             transforms.extend(franka.get_finger_transforms(env_idx, 'franka'))
             transforms.extend(franka.get_links_transforms(env_idx, 'franka'))
+
+            # import IPython; IPython.embed()
             draw_transforms(scene, [env_idx], transforms, length=0.1)
 
     policy = RandomDeltaJointPolicy(franka, 'franka')
     scene.run(policy=policy, custom_draws=custom_draws)
+
+    # scene.run()
+
+    # GymURDFAsset(rel_path_to_urdf, assets_root=path_to_asset_root)
+
+    
+
+

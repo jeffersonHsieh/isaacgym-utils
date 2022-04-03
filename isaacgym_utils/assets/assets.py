@@ -172,16 +172,22 @@ class GymAsset(ABC):
     def get_dof_props(self, env_idx, name):
         env_ptr = self._scene.env_ptrs[env_idx]
         ah = self._scene.ah_map[env_idx][name]
+        # print(f"------------------- inside get dof props -------------------")
+        # print(f"env,ah {env_ptr,ah} ")
         return self._scene.gym.get_actor_dof_properties(env_ptr, ah)
 
     def set_dof_props(self, env_idx, name, dof_props=None):
         if dof_props is None:
             dof_props = self._dof_props
 
+        # print(f"------------------- inside set dof func -------------------")
         if dof_props:
             gym_dof_props = self.get_dof_props(env_idx, name)
 
+            # print(f"get gym_dof_props shape {gym_dof_props.shape}")
+
             for key, val in dof_props.items():
+                # print(f" desired key,val to set: {key,val}")
                 if key == 'driveMode':
                     if type(val[0]) == str:
                         val = [getattr(gymapi, v) for v in val]
@@ -376,6 +382,9 @@ class GymAsset(ABC):
         env_ptr = self._scene.env_ptrs[env_idx]
         ah = self._scene.ah_map[env_idx][name]
         bh = self._scene.gym.get_actor_rigid_body_index(env_ptr, ah, self.rb_names_map[rb_name], gymapi.DOMAIN_ENV)
+        
+        print(f"=========== inside func apply force ===========")
+
 
         if self._scene.use_gpu_pipeline:
             for i, k in enumerate('xyz'):
@@ -551,6 +560,7 @@ class GymBoxAsset(GymAsset):
     @property
     def sz(self):
         return self._sz
+
 
 
 class GymTetGridAsset(GymAsset):
