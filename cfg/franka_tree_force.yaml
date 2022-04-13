@@ -24,7 +24,7 @@ scene:
       compute: 0
       graphics: 0
     plane:
-      dynamic_friction: 0
+      dynamic_friction: 0.4
       static_friction: 0
       restitution: 0
 
@@ -61,8 +61,8 @@ tree:
   shape_props:
     thickness: 1e-3
   dof_props:
-    stiffness: [10, 10, 10]
-    damping: [2e2, 2e2, 2e2]
+    stiffness: [30,30,30]
+    damping: [2e1, 2e1, 2e1]
     effort: [87, 87, 87]
 
 block:
@@ -71,9 +71,9 @@ block:
     sy: 0.05
     sz: 0.05
   shape_props:
-    friction: 0.2
-    rolling_friction: 0.01
-    torsion_friction: 0.01
+    friction: 0.4
+    rolling_friction: 0.4
+    torsion_friction: 0.4
     thickness: 2e-3
   rb_props:
     flags: none # can be none, no_sim, no_gravity
