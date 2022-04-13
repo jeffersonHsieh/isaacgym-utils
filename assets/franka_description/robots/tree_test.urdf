@@ -63,16 +63,52 @@
 	</link>
 
 
-<joint name="link2_joint" type="revolute">
+<joint name="link2_jointx" type="revolute">
 	<safety_controller k_position="100.0" k_velocity="40.0" soft_lower_limit="-2.8973" soft_upper_limit="2.8973"/>
     	<parent link="link1"/>
-    	<child link="link2"/>
+    	<child link="link2x"/>
     	<origin xyz="0 0 1" rpy="0 0 0"/>
-    	<axis xyz="0 1 0"/>
+    	<axis xyz="1 0 0"/>
 	<dynamics damping="10.0"/>
     	<limit lower="-3.1416" upper="3.1416" effort="10" velocity="3"/>
 	<limit effort="87" lower="-2.9671" upper="2.9671" velocity="2.1750"/>
   	</joint>  
+
+  <link name="link2x">
+    <inertial>
+      <mass value="0.001" />
+      <inertia ixx="0.001" ixy="0" ixz="0" iyy="0.001" iyz="0" izz="0.001" />
+    </inertial>  
+  </link>
+
+<joint name="link2_jointy" type="revolute">
+	<safety_controller k_position="100.0" k_velocity="40.0" soft_lower_limit="-2.8973" soft_upper_limit="2.8973"/>
+    	<parent link="link2x"/>
+    	<child link="link2z"/>
+    	<origin xyz="0 0 0" rpy="0 0 0"/>
+    	<axis xyz="1 0 0"/>
+	<dynamics damping="10.0"/>
+    	<limit lower="-3.1416" upper="3.1416" effort="10" velocity="3"/>
+	<limit effort="87" lower="-2.9671" upper="2.9671" velocity="2.1750"/>
+  	</joint> 
+
+  <link name="link2z">
+    <inertial>
+      <mass value="0.001" />
+      <inertia ixx="0.001" ixy="0" ixz="0" iyy="0.001" iyz="0" izz="0.001" />
+    </inertial>  
+  </link>  
+
+  <joint name="link2_jointz" type="revolute">
+	<safety_controller k_position="100.0" k_velocity="40.0" soft_lower_limit="-2.8973" soft_upper_limit="2.8973"/>
+    	<parent link="link2z"/>
+    	<child link="link2"/>
+    	<origin xyz="0 0 0" rpy="0 0 0"/>
+    	<axis xyz="1 0 0"/>
+	<dynamics damping="10.0"/>
+    	<limit lower="-3.1416" upper="3.1416" effort="10" velocity="3"/>
+	<limit effort="87" lower="-2.9671" upper="2.9671" velocity="2.1750"/>
+  	</joint> 
 
 
   <link name="link2">
@@ -125,86 +161,3 @@
   	
 
 </robot>
-
-<!-- <?xml version="1.0" ?>
-<robot name="panda" xmlns:xacro="http://www.ros.org/wiki/xacro">
-  <link name="panda_link0">
-    <visual>
-      <geometry>
-        <mesh filename="package://franka_description/meshes/visual/link0.dae"/>
-      </geometry>
-    </visual>
-    <collision>
-      <geometry>
-        <mesh filename="package://franka_description/meshes/collision/link0.obj"/>
-      </geometry>
-    </collision>
-  </link>
-
-  <link name="panda_link1">
-    <visual>
-      <geometry>
-        <mesh filename="package://franka_description/meshes/visual/link1.dae"/>
-      </geometry>
-    </visual>
-    <collision>
-      <geometry>
-        <mesh filename="package://franka_description/meshes/collision/link1.obj"/>
-      </geometry>
-    </collision>
-  </link>
-  <joint name="panda_joint1" type="revolute">
-    <safety_controller k_position="100.0" k_velocity="40.0" soft_lower_limit="-2.8973" soft_upper_limit="2.8973"/>
-    <origin rpy="0 0 0" xyz="0 0 0.333"/>
-    <parent link="panda_link0"/>
-    <child link="panda_link1"/>
-    <axis xyz="0 0 1"/>
-    <dynamics damping="10.0"/>
-    <limit effort="87" lower="-2.9671" upper="2.9671" velocity="2.1750"/>
-  </joint>
-
-  <link name="panda_link2">
-    <visual>
-      <geometry>
-        <mesh filename="package://franka_description/meshes/visual/link2.dae"/>
-      </geometry>
-    </visual>
-    <collision>
-      <geometry>
-        <mesh filename="package://franka_description/meshes/collision/link2.obj"/>
-      </geometry>
-    </collision>
-  </link>
-  <joint name="panda_joint2" type="revolute">
-    <safety_controller k_position="100.0" k_velocity="40.0" soft_lower_limit="-1.7628" soft_upper_limit="1.7628"/>
-    <origin rpy="-1.57079632679 0 0" xyz="0 0 0"/>
-    <parent link="panda_link1"/>
-    <child link="panda_link2"/>
-    <axis xyz="0 0 1"/>
-    <dynamics damping="10.0"/>
-    <limit effort="87" lower="-1.8326" upper="1.8326" velocity="2.1750"/>
-  </joint>
-
- <link name="panda_link3">
-    <visual>
-      <geometry>
-        <mesh filename="package://franka_description/meshes/visual/link3.dae"/>
-      </geometry>
-    </visual>
-    <collision>
-      <geometry>
-        <mesh filename="package://franka_description/meshes/collision/link3.obj"/>
-      </geometry>
-    </collision>
-  </link>
-  <joint name="panda_joint3" type="revolute">
-    <safety_controller k_position="100.0" k_velocity="40.0" soft_lower_limit="-2.8973" soft_upper_limit="2.8973"/>
-    <origin rpy="1.57079632679 0 0" xyz="0 -0.316 0"/>
-    <parent link="panda_link2"/>
-    <child link="panda_link3"/>
-    <axis xyz="0 0 1"/>
-    <dynamics damping="10.0"/>
-    <limit effort="87" lower="-2.9671" upper="2.9671" velocity="2.1750"/>
-  </joint>
-</robot>
- -->
