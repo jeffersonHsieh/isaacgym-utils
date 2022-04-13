@@ -1,0 +1,82 @@
+scene:
+  n_envs: 1
+  es: 1
+  gui: 1
+  cam:
+    cam_pos: [5, 0, 5]
+    look_at: [0, 0, 0]
+  gym:
+    dt: 0.01
+    substeps: 2
+    up_axis: z
+    type: physx
+    use_gpu_pipeline: True
+    physx:
+      solver_type: 1
+      num_position_iterations: 8
+      num_velocity_iterations: 1
+      rest_offset: 0.0
+      contact_offset: 0.001
+      friction_offset_threshold: 0.001
+      friction_correlation_distance: 0.0005
+      use_gpu: True
+    device:
+      compute: 0
+      graphics: 0
+    plane:
+      dynamic_friction: 0
+      static_friction: 0
+      restitution: 0
+
+
+franka:
+  asset_options:
+    fix_base_link: True
+    flip_visual_attachments: True
+    armature: 0.01
+    max_linear_velocity: 100.0
+    max_angular_velocity: 40.0
+    disable_gravity: True
+  attractor_props:
+    stiffness: 1e3
+    damping: 2.5e2
+  shape_props:
+    thickness: 1e-3
+  dof_props:
+    stiffness: [0, 0, 0, 0, 0, 0, 0, 0, 0]
+    damping: [2e2, 2e2, 2e2, 2e2, 2e2, 2e2, 2e2, 5, 5]
+    effort: [87, 87, 87, 87, 12, 12, 12, 100, 100]
+
+tree:
+  asset_options:
+    fix_base_link: True
+    flip_visual_attachments: True
+    armature: 0.01
+    max_linear_velocity: 100.0
+    max_angular_velocity: 40.0
+    disable_gravity: True
+  attractor_props:
+    stiffness: 0
+    damping: 0
+  shape_props:
+    thickness: 1e-3
+  dof_props:
+    stiffness: [10, 10, 10]
+    damping: [2e2, 2e2, 2e2]
+    effort: [87, 87, 87]
+
+block:
+  dims:
+    sx: 0.05
+    sy: 0.05
+    sz: 0.05
+  shape_props:
+    friction: 0.2
+    rolling_friction: 0.01
+    torsion_friction: 0.01
+    thickness: 2e-3
+  rb_props:
+    flags: none # can be none, no_sim, no_gravity
+    color: [0.2, 0.7, 0.2]
+  asset_options:
+    density: 1000

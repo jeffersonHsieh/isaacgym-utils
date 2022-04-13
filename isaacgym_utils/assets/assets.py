@@ -382,9 +382,6 @@ class GymAsset(ABC):
         env_ptr = self._scene.env_ptrs[env_idx]
         ah = self._scene.ah_map[env_idx][name]
         bh = self._scene.gym.get_actor_rigid_body_index(env_ptr, ah, self.rb_names_map[rb_name], gymapi.DOMAIN_ENV)
-        
-        print(f"=========== inside func apply force ===========")
-
 
         if self._scene.use_gpu_pipeline:
             for i, k in enumerate('xyz'):
@@ -402,7 +399,8 @@ class GymURDFAsset(GymAsset):
         super().__init__(*args, **kwargs)
         asset_uid = self._assets_root / urdf_path
 
-        self._gym_asset_options.default_dof_drive_mode = gymapi.DOF_MODE_POS
+        # self._gym_asset_options.default_dof_drive_mode = gymapi.DOF_MODE_POS
+        self._gym_asset_options.default_dof_drive_mode = gymapi.DOF_MODE_EFFORT
         gym_asset = self._scene.gym.load_asset(self._scene.sim, str(self._assets_root), urdf_path, self._gym_asset_options)
         
         self._insert_asset(asset_uid, gym_asset)

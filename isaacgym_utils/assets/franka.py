@@ -138,6 +138,23 @@ class GymFranka(GymURDFAsset):
 
         return ct_forces
 
+
+    def apply_force(self, env_idx, name, rb_name, force, loc):
+        env_ptr = self._scene.env_ptrs[env_idx]
+        ah = self._scene.ah_map[env_idx][name]
+        bh = self._scene.gym.get_actor_rigid_body_index(env_ptr, ah, self.rb_names_map[rb_name], gymapi.DOMAIN_ENV)
+
+        if self._scene.use_gpu_pipeline:
+            for i, k in enumerate('xyz'):
+                self._scene.tensors['forces'][env_idx, bh, i] = getattr(force, k)
+                self._scene.tensors['forces_pos'][env_idx, bh, i] = getattr(loc, k)
+            self._scene.register_actor_tensor_to_update(env_idx, name, 'forces')
+            return True
+        else:
+            return self._scene.gym.apply_body_force(env_ptr, bh, force, loc)
+
+
+
     @property
     def joint_limits_lower(self):
         return self._LOWER_LIMITS
