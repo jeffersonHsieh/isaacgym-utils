@@ -11,7 +11,7 @@ from .franka_numerical_utils import get_franka_mass_matrix
 
 class GymTree(GymURDFAsset):
 
-    INIT_JOINTS = np.array([0, 0,0 ])
+    INIT_JOINTS = np.array([0, 0,0, 0,0, 0,0 ])
     # INIT_JOINTS = np.array([-np.pi / 16, -np.pi / 16, -np.pi / 16])
     _LOWER_LIMITS = None
     _UPPER_LIMITS = None
@@ -37,6 +37,9 @@ class GymTree(GymURDFAsset):
                         asset_options=cfg['asset_options'],
                         assets_root=assets_root
                         )
+
+        print(f"init tree func {(cfg['dof_props'])} ")   
+
 
         self._use_custom_ee = False
         if 'custom_ee_rb_name' in cfg:
@@ -178,7 +181,7 @@ class GymTree(GymURDFAsset):
         env_ptr = self._scene.env_ptrs[env_idx]
         if self._actuation_mode == 'attractors':
             self.set_dof_props(env_idx, name, {
-                'driveMode': [gymapi.DOF_MODE_NONE] * 3
+                'driveMode': [gymapi.DOF_MODE_NONE] * 7
             })
 
             key = self._key(env_idx, name)
@@ -199,11 +202,11 @@ class GymTree(GymURDFAsset):
             self.set_ee_transform(env_idx, name, gripper_transform)
         elif self._actuation_mode == 'joints':
             self.set_dof_props(env_idx, name, {
-                'driveMode': [gymapi.DOF_MODE_POS] * 3
+                'driveMode': [gymapi.DOF_MODE_POS] * 7
             })
         elif self._actuation_mode == 'torques':
             self.set_dof_props(env_idx, name, {
-                'driveMode': [gymapi.DOF_MODE_EFFORT] * 3
+                'driveMode': [gymapi.DOF_MODE_EFFORT] * 7
             })
         else:
             raise ValueError('Unknown actuation mode! Must be attractors, joints, or torques!')
@@ -218,6 +221,8 @@ class GymTree(GymURDFAsset):
             self._LOWER_LIMITS = dof_props['lower']
             self._UPPER_LIMITS = dof_props['upper']
             self._VEL_LIMITS = dof_props['velocity']
+
+        print(f" ----------- inside post create actor --------- ")
 
         self.set_actuation_mode(self._actuation_mode, env_idx, name)
 

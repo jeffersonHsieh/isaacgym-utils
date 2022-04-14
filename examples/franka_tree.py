@@ -26,13 +26,13 @@ if __name__ == "__main__":
     scene = GymScene(cfg['scene'])
 
 
-    franka = GymFranka(cfg['franka'], scene, actuation_mode='torques')
+    # franka = GymFranka(cfg['franka'], scene, actuation_mode='torques')
     tree = GymTree(cfg['tree'], scene, actuation_mode='joints')
 
-    block = GymBoxAsset(scene, **cfg['block']['dims'],  shape_props=cfg['block']['shape_props'])
+    # block = GymBoxAsset(scene, **cfg['block']['dims'],  shape_props=cfg['block']['shape_props'])
 
 
-    franka_transform = gymapi.Transform(p=gymapi.Vec3(1, 1, 0))
+    # franka_transform = gymapi.Transform(p=gymapi.Vec3(1, 1, 0))
     tree_transform = gymapi.Transform(p=gymapi.Vec3(0, 0, 0))
 
     franka_name, tree_name, block_name = 'franka', 'tree', 'block'
@@ -44,7 +44,7 @@ if __name__ == "__main__":
         # scene.add_asset(franka_name, franka, franka_transform, collision_filter=1) # avoid self-collisions
 
         scene.add_asset(tree_name, tree, tree_transform, collision_filter=1) # avoid self-collisions
-        scene.add_asset('block', block, gymapi.Transform(p=gymapi.Vec3(-1, -1, cfg['block']['dims']['sz']/2)) )
+        # scene.add_asset('block', block, gymapi.Transform(p=gymapi.Vec3(-1, -1, cfg['block']['dims']['sz']/2)) )
 
     scene.setup_all_envs(setup)    
 
@@ -77,32 +77,46 @@ if __name__ == "__main__":
 
     def policy(scene, env_idx, t_step, t_sim):
 
-        force = np_to_vec3([10, 0, 0])
+        force_magnitude = 50
+
+        force = np_to_vec3([force_magnitude, 0, 0])
         force_block = np_to_vec3([-.5, 0, 0])
 
-        if t_sim > 5:
-            print("t_sim {t_sim}")
+        if t_sim > 10:
+            print(f"t_sim {t_sim}")
             force = np_to_vec3([0, 0, 0])
             force_block = np_to_vec3([0, 0, 0])
+
+        if t_sim > 14:
+            force = np_to_vec3([0, force_magnitude, 0])
+
+        if t_sim > 16:
+            force = np_to_vec3([0, 0, 0])
+
+        if t_sim > 18:
+            force = np_to_vec3([force_magnitude, 0, 0])
+
+        if t_sim > 20:
+            force = np_to_vec3([0, 0, 0])
 
 
         tree_tf = tree.get_link_transform(0, tree_name, 'leaf1')
 
 
-        block_tf = block.get_rb_transforms(0,block_name)[0]
+        # block_tf = block.get_rb_transforms(0,block_name)[0]
 
         
 
         # loc = ee_transform.p
         loc_tree = tree_tf.p
-        loc_block = block_tf.p
+        # loc_block = block_tf.p
 
-        print(f"loc_block {loc_block}")
+        # print(f"loc_block {loc_block}")
 
         # print(f"link location:, {loc}")
         # franka.apply_force(env_idx, 'franka', 'panda_link2', force, loc)
         tree.apply_force(env_idx, tree_name, 'link2', force, loc_tree)
-        block.apply_force(env_idx, block_name, 'box', force_block, loc_block)
+        # block.apply_force(env_idx, block_name, 'box', force_block, loc_block)
 
 
 
