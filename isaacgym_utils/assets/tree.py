@@ -11,7 +11,14 @@ from .franka_numerical_utils import get_franka_mass_matrix
 
 class GymTree(GymURDFAsset):
 
-    INIT_JOINTS = np.array([0, 0,0, 0,0, 0,0 ])
+    global num_joints, joint_names, num_links, link_names
+
+    joint_names = ['link1_jointx', 'link1_jointy', 'link1_jointz', 'link2_jointx', 'link2_jointy', 'link2_jointz', 'link3_jointx', 'link3_jointy', 'link3_jointz']
+    link_names = ['link1', 'link2', 'link3']
+    num_joints = len(joint_names)
+    num_links = 3
+
+    INIT_JOINTS = np.zeros(num_joints)
     # INIT_JOINTS = np.array([-np.pi / 16, -np.pi / 16, -np.pi / 16])
     _LOWER_LIMITS = None
     _UPPER_LIMITS = None
@@ -59,6 +66,13 @@ class GymTree(GymURDFAsset):
         self._actuation_mode = actuation_mode
         self._attractor_handles_map = {}
         self._attractor_transforms_map = {}
+
+        self.joint_names = joint_names
+        self.link_names = link_names
+        self.num_joints = num_joints
+        self.num_links = num_links
+
+        
 
         if actuation_mode == 'attractors':
             self._attractor_stiffness = cfg['attractor_props']['stiffness']
@@ -181,7 +195,7 @@ class GymTree(GymURDFAsset):
         env_ptr = self._scene.env_ptrs[env_idx]
         if self._actuation_mode == 'attractors':
             self.set_dof_props(env_idx, name, {
-                'driveMode': [gymapi.DOF_MODE_NONE] * 7
+                'driveMode': [gymapi.DOF_MODE_NONE] * num_joints
             })
 
             key = self._key(env_idx, name)
@@ -202,11 +216,11 @@ class GymTree(GymURDFAsset):
             self.set_ee_transform(env_idx, name, gripper_transform)
         elif self._actuation_mode == 'joints':
             self.set_dof_props(env_idx, name, {
-                'driveMode': [gymapi.DOF_MODE_POS] * 7
+                'driveMode': [gymapi.DOF_MODE_POS] * num_joints
             })
         elif self._actuation_mode == 'torques':
             self.set_dof_props(env_idx, name, {
-                'driveMode': [gymapi.DOF_MODE_EFFORT] * 7
+                'driveMode': [gymapi.DOF_MODE_EFFORT] * num_joints
             })
         else:
             raise ValueError('Unknown actuation mode! Must be attractors, joints, or torques!')

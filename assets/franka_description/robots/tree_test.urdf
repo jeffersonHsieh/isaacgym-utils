@@ -167,18 +167,56 @@
 	</link>
 	
 
-  <joint name="link3_joint" type="revolute">
+  	
+  	<joint name="link3_jointx" type="revolute">
 	<safety_controller k_position="100.0" k_velocity="40.0" soft_lower_limit="-2.8973" soft_upper_limit="2.8973"/>
     	<parent link="link2"/>
-    	<child link="leaf1"/>
+    	<child link="link3x"/>
     	<origin xyz="0 0 0.5" rpy="0 0 0"/>
-    	<axis xyz="0 1 0"/>
+    	<axis xyz="1 0 0"/>
 	<dynamics damping="10.0"/>
     	<limit lower="-3.1416" upper="3.1416" effort="10" velocity="3"/>
 	<limit effort="87" lower="-2.9671" upper="2.9671" velocity="2.1750"/>
   	</joint>  
 
-	<link name="leaf1">
+  <link name="link3x">
+    <inertial>
+      <mass value="0.001" />
+      <inertia ixx="0.001" ixy="0" ixz="0" iyy="0.001" iyz="0" izz="0.001" />
+    </inertial>  
+  </link>
+
+<joint name="link3_jointy" type="revolute">
+	<safety_controller k_position="100.0" k_velocity="40.0" soft_lower_limit="-2.8973" soft_upper_limit="2.8973"/>
+    	<parent link="link3x"/>
+    	<child link="link3z"/>
+    	<origin xyz="0 0 0" rpy="0 0 0"/>
+    	<axis xyz="0 1 0"/>
+	<dynamics damping="10.0"/>
+    	<limit lower="-3.1416" upper="3.1416" effort="10" velocity="3"/>
+	<limit effort="87" lower="-2.9671" upper="2.9671" velocity="2.1750"/>
+  	</joint> 
+
+  <link name="link3z">
+    <inertial>
+      <mass value="0.001" />
+      <inertia ixx="0.001" ixy="0" ixz="0" iyy="0.001" iyz="0" izz="0.001" />
+    </inertial>  
+  </link>  
+
+  <joint name="link3_jointz" type="revolute">
+	<safety_controller k_position="100.0" k_velocity="40.0" soft_lower_limit="-2.8973" soft_upper_limit="2.8973"/>
+    	<parent link="link3z"/>
+    	<child link="link3"/>
+    	<origin xyz="0 0 0" rpy="0 0 0"/>
+    	<axis xyz="0 0 1"/>
+	<dynamics damping="10.0"/>
+    	<limit lower="-3.1416" upper="3.1416" effort="10" velocity="3"/>
+	<limit effort="87" lower="-2.9671" upper="2.9671" velocity="2.1750"/>
+  	</joint> 
+  	
+
+	<link name="link3">
 		<visual>
 		    <origin xyz="0 0 0" rpy="0 0 0"/>
 			<geometry>
