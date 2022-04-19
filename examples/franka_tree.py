@@ -14,6 +14,7 @@ from isaacgym_utils.policy import GraspBlockPolicy, MoveBlockPolicy
 from isaacgym_utils.draw import draw_transforms, draw_contacts, draw_camera
 
 import pdb
+import sys
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -39,7 +40,7 @@ if __name__ == "__main__":
     franka_name, tree_name, block_name = 'franka', 'tree', 'block'
 
     current_iteration = 0
-    num_iteration = 10
+    num_iteration = 100
     force_magnitude = 50
     push_toggle = True
     
@@ -107,68 +108,110 @@ if __name__ == "__main__":
 
     def set_force(force, index):
         force_applied_ = np.zeros((3,tree.num_links))
-        force_applied_[:,index] = force
+        force_applied_[0,index] = force[0]
+        force_applied_[1,index] = force[1]
+        force_applied_[2,index] = force[2]
 
         return force_applied_ 
 
 
+    
 
-    def save_data():
-        print(f" ********* saving data ********* ")
 
+    vertex_init_pos_list = []
+    vertex_final_pos_list = []
+    force_applied_list = []
+
+    def save_data(ten_sec_counter):
+        
         edge_def = [(1,2), (2,3)]   
         coeff_stiff_damp = get_stiffness()
 
-        print(f"vertex_init_pos {vertex_init_pos}")
-        print(f"vertex_final_pos {vertex_final_pos}")
-        print(f"coeff_stiff_damp {coeff_stiff_damp} ")
-        print(f"edge_def {edge_def}")
-        print(f"force_applied {force_applied}")
+        if ten_sec_counter == (num_iteration+1):
+            vertex_init_pos_list.append(vertex_init_pos)
+            vertex_final_pos_list.append(vertex_final_pos)
+            force_applied_list.append(force_applied)
 
-        save('X_vertex_init_pose', vertex_init_pos )
-        save('X_coeff_stiff_damp', coeff_stiff_damp )
-        save('X_edge_def', edge_def )
-        save('X_force_applied', force_applied )
-        save('Y_vertex_final_pos', vertex_final_pos )
+            print(f" ********* saving data ********* ")
+            save('X_vertex_init_pose', vertex_init_pos_list )
+            save('X_coeff_stiff_damp', coeff_stiff_damp )
+            save('X_edge_def', edge_def )
+            save('X_force_applied', force_applied_list )
+            save('Y_vertex_final_pos', vertex_final_pos_list )
 
+            print(f"Vinit, Vfinal, Fapplied lengths: {vertex_init_pos_list}")
+            sys.exit() 
 
+        else:
+            vertex_init_pos_list.append(vertex_init_pos)
+            vertex_final_pos_list.append(vertex_final_pos)
+            force_applied_list.append(force_applied)
 
-    def policy(scene, env_idx, t_step, t_sim):
-        global vertex_init_pos, no_contact, force, loc_tree, vertex_final_pos, force_applied
-  
-        # #get pose 
-        tree_tf = tree.get_link_transform(0, tree_name, 'link3')
-        # print(f"t_sim: {t_sim}, tree_pos: {tree_tf.p},  tree rot: {tree_tf.r}, tree.joint_names: {tree.joint_names}")
+            print(f" ---- appending data {ten_sec_counter}th time ---- ")
+            print(f"Vinit, Vfinal, Fapplied lengths: {len(vertex_init_pos_list)},  {len(vertex_final_pos_list)},  {len(force_applied_list)}")
+            print(f"vertex_init_pos {vertex_init_pos}")
+            print(f"vertex_final_pos {vertex_final_pos}")
+            print(f"force_applied {force_applied}")
 
-        ten_sec_interval = t_sim%10
-
+            
         
 
+
+    tree_tf3 = tree.get_link_transform(0, tree_name, 'link3')
+    tree_tf2 = tree.get_link_transform(0, tree_name, 'link2')
+    tree_tf1 = tree.get_link_transform(0, tree_name, 'link1')
+    tree_location_list = [tree_tf1, tree_tf2, tree_tf3]
+    loc_tree = tree_tf3.p
+    random_index = 1
+
+    def policy(scene, env_idx, t_step, t_sim):
+        global vertex_init_pos, no_contact, force, loc_tree, vertex_final_pos, force_applied, random_index
+  
+        # #get pose 
+        tree_tf3 = tree.get_link_transform(0, tree_name, 'link3')
+
         # #create random force
-        if t_sim > 5 and t_sim < 10:
-            if no_contact == True:
-                print(f"===== making contact ========")
-                vertex_init_pos = get_link_poses()
-                no_contact = False
-                force = np_to_vec3([force_magnitude, 0, 0])
-                force_applied = set_force(vec3_to_np(force), 0)
-                # force = np_to_vec3([np.random.rand()*force_magnitude, np.random.rand()*force_magnitude, np.random.rand()*force_magnitude])
-                loc_tree = tree_tf.p
 
-            tree.apply_force(env_idx, tree_name, 'link3', force, loc_tree)
+        #counter
+        ten_sec_interval = t_sim%10
+        ten_sec_counter = int(t_sim//10)
 
-        if t_sim > 10:
+        if ten_sec_interval < 5:
             if no_contact == False:
                 print(f"===== breaking contact ========")
                 vertex_final_pos = get_link_poses()
-                save_data()
+                save_data(ten_sec_counter)
                 no_contact = True
                 force = np_to_vec3([0, 0, 0])
                  # # force = np_to_vec3([np.random.rand()*force_magnitude, np.random.rand()*force_magnitude, np.random.rand()*force_magnitude])
-                loc_tree = tree_tf.p
+                loc_tree = tree_tf3.p
             
             tree.apply_force(env_idx, tree_name, 'link3', force, loc_tree)
 
+
+        
+        if ten_sec_interval > 5:
+            if no_contact == True:
+
+                vertex_init_pos = get_link_poses()
+                no_contact = False
+
+                #force random
+                fx = np.random.randint(-force_magnitude,force_magnitude)
+                fy = np.random.randint(-force_magnitude,force_magnitude)
+                fz = np.random.randint(-force_magnitude,force_magnitude)
+
+                force = np_to_vec3([fx, fy, fz])
+
+                #location random
+                random_index = np.random.randint(0+1, len(tree_location_list))
+                force_applied = set_force([fx,fy,fz], random_index)
+                loc_tree = tree_location_list[random_index].p
+                print(f"===== making contact {tree.link_names[random_index]} with F {force} ========")
+
+            tree.apply_force(env_idx, tree_name, tree.link_names[random_index], force, loc_tree)
+
+       
 
         # get delta pose
 
