@@ -1,7 +1,7 @@
 <?xml version="1.0" ?>
 <robot name="pi_robot">
 
-	<!-- * * * Link Definitions * * * -->
+	<!-- * * * Color Definitions * * * -->
 	<material name="blue">
 	    <color rgba="0 0 0.8 1"/>
 	</material>
@@ -14,8 +14,7 @@
 	    <color rgba="0.3 0.15 0.05 1.0"/>
 	</material>
 
-
-
+	<!-- * * * Link Definitions * * * -->
 
  	<link name="base_link">
 		<visual>
@@ -34,7 +33,7 @@
 		</collision>	
 	</link>
 
-  
+  <!-- spherical joint  -->
 <joint name="link1_jointx" type="revolute">
 	<safety_controller k_position="100.0" k_velocity="40.0" soft_lower_limit="-2.8973" soft_upper_limit="2.8973"/>
     	<parent link="base_link"/>
@@ -83,6 +82,7 @@
   	</joint> 
 
 
+<!-- link  -->
   <link name="link1">
 		<visual>
 			<origin xyz="0 0 0.5" rpy="0 0 0"/>
@@ -100,6 +100,7 @@
 		</collision>	
 	</link>
 
+<!-- spherical joint  -->
 
 <joint name="link2_jointx" type="revolute">
 	<safety_controller k_position="100.0" k_velocity="40.0" soft_lower_limit="-2.8973" soft_upper_limit="2.8973"/>
@@ -148,6 +149,7 @@
 	<limit effort="87" lower="-2.9671" upper="2.9671" velocity="2.1750"/>
   	</joint> 
 
+<!-- link  -->
 
   <link name="link2">
 		<visual>
@@ -166,7 +168,7 @@
 		</collision>	
 	</link>
 	
-
+<!-- spherical joint  -->
   	
   	<joint name="link3_jointx" type="revolute">
 	<safety_controller k_position="100.0" k_velocity="40.0" soft_lower_limit="-2.8973" soft_upper_limit="2.8973"/>
@@ -214,9 +216,101 @@
     	<limit lower="-3.1416" upper="3.1416" effort="10" velocity="3"/>
 	<limit effort="87" lower="-2.9671" upper="2.9671" velocity="2.1750"/>
   	</joint> 
-  	
 
+	  <!-- link  -->
+  	
 	<link name="link3">
+		<visual>
+			<origin xyz="0 0 0.25" rpy="0 0 0"/>
+			<geometry>
+				<cylinder radius="0.04" length="0.5"/>
+			</geometry>
+	     	<material name="brown">
+			</material>
+	   </visual>
+	   <collision>
+		    <origin xyz="0 0 0.25" rpy="0 0 0"/>
+			<geometry>
+				<cylinder radius="0.04" length="0.5"/>
+			</geometry>
+		</collision>	
+	</link>
+	
+	<!-- spherical joint  -->
+	<joint name="link4_jointx" type="revolute">
+	<safety_controller k_position="100.0" k_velocity="40.0" soft_lower_limit="-2.8973" soft_upper_limit="2.8973"/>
+    	<parent link="link3"/>
+    	<child link="link4x"/>
+    	<origin xyz="0 0 0.5" rpy="0 0 0"/>
+    	<axis xyz="1 0 0"/>
+	<dynamics damping="10.0"/>
+    	<limit lower="-3.1416" upper="3.1416" effort="10" velocity="3"/>
+	<limit effort="87" lower="-2.9671" upper="2.9671" velocity="2.1750"/>
+  	</joint>  
+
+  <link name="link4x">
+    <inertial>
+      <mass value="0.001" />
+      <inertia ixx="0.001" ixy="0" ixz="0" iyy="0.001" iyz="0" izz="0.001" />
+    </inertial>  
+  </link>
+
+<joint name="link4_jointy" type="revolute">
+	<safety_controller k_position="100.0" k_velocity="40.0" soft_lower_limit="-2.8973" soft_upper_limit="2.8973"/>
+    	<parent link="link4x"/>
+    	<child link="link4z"/>
+    	<origin xyz="0 0 0" rpy="0 0 0"/>
+    	<axis xyz="0 1 0"/>
+	<dynamics damping="10.0"/>
+    	<limit lower="-3.1416" upper="3.1416" effort="10" velocity="3"/>
+	<limit effort="87" lower="-2.9671" upper="2.9671" velocity="2.1750"/>
+  	</joint> 
+
+  <link name="link4z">
+    <inertial>
+      <mass value="0.001" />
+      <inertia ixx="0.001" ixy="0" ixz="0" iyy="0.001" iyz="0" izz="0.001" />
+    </inertial>  
+  </link>  
+
+  <joint name="link4_jointz" type="revolute">
+	<safety_controller k_position="100.0" k_velocity="40.0" soft_lower_limit="-2.8973" soft_upper_limit="2.8973"/>
+    	<parent link="link4z"/>
+    	<child link="link4"/>
+    	<origin xyz="0 0 0" rpy="0 0 0"/>
+    	<axis xyz="0 0 1"/>
+	<dynamics damping="10.0"/>
+    	<limit lower="-3.1416" upper="3.1416" effort="10" velocity="3"/>
+	<limit effort="87" lower="-2.9671" upper="2.9671" velocity="2.1750"/>
+  	</joint> 
+	
+	  <!-- link  -->
+	<!-- pi/4 = 0.78539816339 -->
+	<!-- 0.25/sqrt(2) = 0.17677669529 -->
+	<!-- 0.17677669529 /sqrt(2) = 0.12499999999 -->
+
+	<link name="link4">
+		<visual>
+			<origin xyz="0.17677669529 -0.12499999999 0.12499999999" rpy= "0.78539816339 0.78539816339 0"/>
+			<geometry>
+				<cylinder radius="0.03" length="0.5"/>
+			</geometry>
+	     	<material name="brown">
+			</material>
+	   </visual>
+	   <collision>
+		    <origin xyz="0.21272588 0.21272588 0.21272588" rpy="0 0 0"/>
+			<geometry>
+				<cylinder radius="0.03" length="0.5"/>
+			</geometry>
+		</collision>	
+	</link>
+	
+	<!-- spherical joint  -->
+
+
+
+	<!-- <link name="link3">
 		<visual>
 		    <origin xyz="0 0 0" rpy="0 0 0"/>
 			<geometry>
@@ -231,7 +325,7 @@
 				<box size=".1 .1 .1"/>
 			</geometry>
 		</collision>	
-	</link>
+	</link> -->
 	
 	
   	
