@@ -305,6 +305,30 @@
 			</geometry>
 		</collision>	
 	</link>
+
+	<!-- link  -->
+	<!-- pi/4 = 0.78539816339 -->
+	<!-- 0.25/sqrt(2) = 0.17677669529 -->
+	<!-- 0.17677669529 /sqrt(2) = 0.12499999999 -->
+<!-- 
+	<link name="link5">
+		<visual>
+			<origin xyz="-0.17677669529 -0.12499999999 0.12499999999" rpy= "0.78539816339 -0.78539816339 0"/>
+			<geometry>
+				<cylinder radius="0.03" length="0.5"/>
+			</geometry>
+	     	<material name="brown">
+			</material>
+	   </visual>
+	   <collision>
+		    <origin xyz="0.21272588 0.21272588 0.21272588" rpy="0 0 0"/>
+			<geometry>
+				<cylinder radius="0.03" length="0.5"/>
+			</geometry>
+		</collision>	
+	</link> -->
+
+
 	
 	<!-- spherical joint  -->
 
