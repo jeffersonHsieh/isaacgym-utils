@@ -13,18 +13,28 @@ class GymTree(GymURDFAsset):
 
     global num_joints, joint_names, num_links, link_names
 
-    joint_names = ['link1_jointx', 'link1_jointy', 'link1_jointz', 'link2_jointx', 'link2_jointy', 'link2_jointz', 'link3_jointx', 'link3_jointy', 'link3_jointz']
-    link_names = ['link1', 'link2', 'link3']
+    joint_names = ['link1_jointx', 'link1_jointy', 'link1_jointz', 'link2_jointx', 'link2_jointy', 'link2_jointz', 'link3_jointx', 'link3_jointy', 'link3_jointz' ,
+        'link4_jointx', 'link4_jointy', 'link4_jointz', 'link5_jointz','link6_jointz',
+        'link7_jointx', 'link7_jointy', 'link7_jointz',  'link8_jointz', 
+        'link9_jointx', 'link9_jointy', 'link9_jointz',  'link10_jointz', 
+        'link11_jointx', 'link11_jointy', 'link11_jointz',  'link12_jointz'  ]
+    link_names = ['link1', 'link2', 'link3', 'link4', 'link5', 'link6', 'link7', 'link7_leaf', 'link8', 'link8_leaf', 'link9', 'link9_leaf', 'link10', 'link10_leaf',
+     'link11', 'link11_leaf', 'link12', 'link12_leaf' ]
     num_joints = len(joint_names)
-    num_links = 3
+    num_links = len(link_names)
+    min_angle = -np.pi/16
+    max_angle = np.pi/16
+    print(f" num_joints: {num_joints} and num_links: {num_links} ")
 
     INIT_JOINTS = np.zeros(num_joints)
-    # INIT_JOINTS = np.array([-np.pi / 16, -np.pi / 16, -np.pi / 16])
+    # INIT_JOINTS = np.array(np.random.uniform(min_angle,max_angle,num_joints))
     _LOWER_LIMITS = None
     _UPPER_LIMITS = None
     _VEL_LIMITS = None
 
-    _URDF_PATH = 'franka_description/robots/tree_test.urdf'
+    # _URDF_PATH = '/home/marklee/github/build_sdf/generated_urdf/tree_pruned.urdf'
+    _URDF_PATH = 'franka_description/robots/tree_full.urdf'
+    # _URDF_PATH = 'franka_description/robots/tree_test.urdf'
 
     @staticmethod
     def _key(env_idx, name):

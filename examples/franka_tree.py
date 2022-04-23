@@ -19,7 +19,7 @@ import sys
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     # parser.add_argument('--cfg', '-c', type=str, default='cfg/franka_tree.yaml')
-    parser.add_argument('--cfg', '-c', type=str, default='cfg/franka_tree_force.yaml')
+    parser.add_argument('--cfg', '-c', type=str, default='cfg/franka_tree_force_full.yaml')
     args = parser.parse_args()
     cfg = YamlConfig(args.cfg)
 
@@ -65,8 +65,27 @@ if __name__ == "__main__":
             ee_transform_0 = tree.get_ee_transform_MARK(env_idx, tree_name, 'link1')
             ee_transform_1 = tree.get_ee_transform_MARK(env_idx, tree_name, 'link2')
             ee_transform_2 = tree.get_ee_transform_MARK(env_idx, tree_name, 'link3')
+            ee_transform_3 = tree.get_ee_transform_MARK(env_idx, tree_name, 'link4')
+            ee_transform_4 = tree.get_ee_transform_MARK(env_idx, tree_name, 'link5')
+            ee_transform_5 = tree.get_ee_transform_MARK(env_idx, tree_name, 'link6')
+            ee_transform_6 = tree.get_ee_transform_MARK(env_idx, tree_name, 'link7')
+            ee_transform_7 = tree.get_ee_transform_MARK(env_idx, tree_name, 'link8')
+            ee_transform_8 = tree.get_ee_transform_MARK(env_idx, tree_name, 'link9')
+            ee_transform_9 = tree.get_ee_transform_MARK(env_idx, tree_name, 'link10')
+            ee_transform_10 = tree.get_ee_transform_MARK(env_idx, tree_name, 'link11')
+            ee_transform_11 = tree.get_ee_transform_MARK(env_idx, tree_name, 'link12')
 
-            transforms = [ee_transform_0, ee_transform_1, ee_transform_2]
+            ee_transform_l7 = tree.get_ee_transform_MARK(env_idx, tree_name, 'link7_leaf')
+            ee_transform_l8 = tree.get_ee_transform_MARK(env_idx, tree_name, 'link8_leaf')
+            ee_transform_l9 = tree.get_ee_transform_MARK(env_idx, tree_name, 'link9_leaf')
+            ee_transform_l10 = tree.get_ee_transform_MARK(env_idx, tree_name, 'link10_leaf')
+            ee_transform_l11 = tree.get_ee_transform_MARK(env_idx, tree_name, 'link11_leaf')
+            ee_transform_l12 = tree.get_ee_transform_MARK(env_idx, tree_name, 'link12_leaf')
+
+
+
+            transforms = [ee_transform_0, ee_transform_1, ee_transform_2, ee_transform_3, ee_transform_4, ee_transform_5, ee_transform_6, ee_transform_7, ee_transform_8, ee_transform_9,ee_transform_10, ee_transform_11
+            , ee_transform_l7, ee_transform_l8, ee_transform_l9, ee_transform_l10, ee_transform_l11, ee_transform_l12 ]
             draw_transforms(scene, [env_idx], transforms)
 
         draw_contacts(scene, scene.env_idxs)
@@ -116,8 +135,6 @@ if __name__ == "__main__":
 
 
     
-
-
     vertex_init_pos_list = []
     vertex_final_pos_list = []
     force_applied_list = []
@@ -154,13 +171,34 @@ if __name__ == "__main__":
             print(f"force_applied {force_applied}")
 
             
-        
 
-
-    tree_tf3 = tree.get_link_transform(0, tree_name, 'link3')
-    tree_tf2 = tree.get_link_transform(0, tree_name, 'link2')
+    
+    
     tree_tf1 = tree.get_link_transform(0, tree_name, 'link1')
-    tree_location_list = [tree_tf1, tree_tf2, tree_tf3]
+    tree_tf2 = tree.get_link_transform(0, tree_name, 'link2')
+    tree_tf3 = tree.get_link_transform(0, tree_name, 'link3')
+    tree_tf4 = tree.get_link_transform(0, tree_name, 'link4')
+
+    tree_tf5 = tree.get_link_transform(0, tree_name, 'link5')
+    tree_tf6 = tree.get_link_transform(0, tree_name, 'link6')
+    tree_tf7 = tree.get_link_transform(0, tree_name, 'link7')
+    tree_tf8 = tree.get_link_transform(0, tree_name, 'link8')
+    tree_tf9 = tree.get_link_transform(0, tree_name, 'link9')
+    tree_tf10 = tree.get_link_transform(0, tree_name, 'link10')
+    tree_tf11 = tree.get_link_transform(0, tree_name, 'link11')
+    tree_tf12 = tree.get_link_transform(0, tree_name, 'link12')
+
+    tree_tf7L = tree.get_link_transform(0, tree_name, 'link7_leaf')
+    tree_tf8L = tree.get_link_transform(0, tree_name, 'link8_leaf')
+    tree_tf9L = tree.get_link_transform(0, tree_name, 'link9_leaf')
+    tree_tf10L = tree.get_link_transform(0, tree_name, 'link10_leaf')
+    tree_tf11L = tree.get_link_transform(0, tree_name, 'link11_leaf')
+    tree_tf12L = tree.get_link_transform(0, tree_name, 'link12_leaf')
+
+
+    tree_location_list = [tree_tf1, tree_tf2, tree_tf3, tree_tf4, tree_tf5, tree_tf6, tree_tf7, tree_tf8, tree_tf9, tree_tf10, tree_tf11, tree_tf12
+    , tree_tf7L, tree_tf8L , tree_tf9L, tree_tf10L, tree_tf11L, tree_tf12L]
+    
     loc_tree = tree_tf3.p
     random_index = 1
 
@@ -209,7 +247,7 @@ if __name__ == "__main__":
                 loc_tree = tree_location_list[random_index].p
                 print(f"===== making contact {tree.link_names[random_index]} with F {force} ========")
 
-            tree.apply_force(env_idx, tree_name, tree.link_names[random_index], force, loc_tree)
+            # tree.apply_force(env_idx, tree_name, tree.link_names[random_index], force, loc_tree)
 
        
 
