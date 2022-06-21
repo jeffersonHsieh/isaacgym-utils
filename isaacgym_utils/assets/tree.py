@@ -13,6 +13,7 @@ class GymTree(GymURDFAsset):
 
     global num_joints, joint_names, num_links, link_names
 
+    # TODO: Import dynamically from Tree Generation pipeline
     joint_names = ['link1_jointx', 'link1_jointy', 'link1_jointz', 'link2_jointx', 'link2_jointy', 'link2_jointz', 'link3_jointx', 'link3_jointy', 'link3_jointz' ,
         'link4_jointx', 'link4_jointy', 'link4_jointz', 'link5_jointz','link6_jointz',
         'link7_jointx', 'link7_jointy', 'link7_jointz',  'link8_jointz', 
