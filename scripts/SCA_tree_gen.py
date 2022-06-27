@@ -3,8 +3,13 @@ import matplotlib.pyplot as plt
 import numpy as np
 import numpy.linalg
 from xml.dom import minidom
+import os
+from scipy.spatial.transform import Rotation
+
+import yaml
 
 BATCH_SIZE = 1
+STIFFNESS_BASE = 11000
 
 def sphere(pt, a=1.0, b=1.0, c=1.0):
     r = (pt[0]-0.5)**2*a + (pt[1]-0.5)**2*b + (pt[2]-0.5)**2*c
@@ -46,6 +51,7 @@ class TreeGenerator(object):
         self.scaling = scaling
         self.pipe_model_exponent = pipe_model_exponent
         self.step_width_scaling = step_width_scaling
+        self.name_dict = {"joints":[], "links":[]}
 
     def min_da(self):
         min_da = None
@@ -132,6 +138,9 @@ class TreeGenerator(object):
         return sv_sets
 
     def generate_tree(self):
+        #self.tree_points = np.array([[0,0,0],[0,0,1],[0,0.25,2],[0,0.2,2],[0,0.3,2],[0,0.15,2],[0,0.1,2],[0,0.05,2], [0,0,2],[0,0.35,2],[0,0.4,2],[0,0.5,2],[0,0.45,2]])
+        #self.edges = {0:[1],1:[2,3,4,5,6,7,8,9,10,11,12]} #1:[2,3,4,5,6,7,8,9,10,11,12]
+        #return self.tree_points
         i = 0
         while len(self.att_pts) >= 1 and i < self.max_steps and len(self.tree_points) < self.max_tree_points:
             sv_sets = self.generate_sv_sets()
@@ -144,6 +153,7 @@ class TreeGenerator(object):
             self.update_closest_tp_list(new_tps, point_index)
             self.step_width = self.step_width * self.step_width_scaling
             i += 1
+        return self.tree_points
 
     def generate_new_point(self, tp_index, sv_set):
         active_att_pts = self.att_pts[sv_set]
@@ -227,6 +237,8 @@ class TreeGenerator(object):
         with open(save_path_file, "w") as f:
             f.write(tree_string)
 
+        return self.name_dict, os.path.abspath(save_path_file)
+
     def generate_color_definitions(self, urdf, robot):
         for name, rgba in [("blue", "0 0 0.8 1"), ("green", "0 0.6 0 0.8"), ("brown", "0.3 0.15 0.05 1.0")]:
             material = urdf.createElement('material')
@@ -286,82 +298,109 @@ class TreeGenerator(object):
         parent.appendChild(inertial)
 
     def generate_spherical_joint(self, urdf, robot, tree_node, children):
+        jointbase = None
         joint_one_offset = [0,0,0.01]
         parent = self.find_parent(tree_node)
         if parent is not None:
             joint_one_offset = self.tree_points[tree_node] - self.tree_points[parent]
 
-        jointx = urdf.createElement('joint')
-        jointx.setAttribute('name', 'joint%s_x'%tree_node)
-        jointx.setAttribute('type', 'revolute')
-        self.add_safety_controller(urdf, jointx)
+        jointbase = urdf.createElement('joint')
+        jointbase.setAttribute('name', 'joint%s_base'%tree_node)
+        #self.name_dict["joints"].append('joint%s_base'%tree_node)
+        jointbase.setAttribute('type', 'fixed')
         joint_parent = urdf.createElement('parent')
         if parent is None:
-            joint_parent.setAttribute('link', 'base_link')
+                joint_parent.setAttribute('link', 'base_link')
         else:
             joint_parent.setAttribute('link', 'link_%s_to_%s'%(parent,tree_node))
-        jointx.appendChild(joint_parent)
-        jointx.appendChild(joint_parent)
+        jointbase.appendChild(joint_parent)
 
         joint_child = urdf.createElement('child')
-        joint_child.setAttribute('link', 'link%s_x'%tree_node)
-        jointx.appendChild(joint_child)
+        joint_child.setAttribute('link', 'link%s_base'%(tree_node))
+        jointbase.appendChild(joint_child)
+        robot.appendChild(jointbase)
 
         origin = urdf.createElement('origin')
         origin.setAttribute('xyz', '%s %s %s'%(joint_one_offset[0], joint_one_offset[1], joint_one_offset[2]))
         origin.setAttribute('rpy', '0 0 0')
-        jointx.appendChild(origin)
+        jointbase.appendChild(origin)
 
-        axis = urdf.createElement('axis')
-        axis.setAttribute('xyz', '1 0 0')
-        jointx.appendChild(axis)
-
-        self.add_dynamics(urdf, jointx)
-        self.add_limits(urdf, jointx)
-        robot.appendChild(jointx)
-
-        linkx = urdf.createElement('link')
-        linkx.setAttribute('name', 'link%s_x'%tree_node)
-        self.add_inertial(urdf, linkx)
-        robot.appendChild(linkx)
-
-        jointy = urdf.createElement('joint')
-        jointy.setAttribute('name', 'joint%s_y' % tree_node)
-        jointy.setAttribute('type', 'revolute')
-        self.add_safety_controller(urdf, jointy)
-        joint_parent = urdf.createElement('parent')
-        joint_parent.setAttribute('link', 'link%s_x'%tree_node)
-        jointy.appendChild(joint_parent)
-
-        joint_child = urdf.createElement('child')
-        joint_child.setAttribute('link', 'link%s_y' % tree_node)
-        jointy.appendChild(joint_child)
-
-        origin = urdf.createElement('origin')
-        origin.setAttribute('xyz', '0 0 0')
-        origin.setAttribute('rpy', '0 0 0')
-        jointy.appendChild(origin)
-
-        axis = urdf.createElement('axis')
-        axis.setAttribute('xyz', '0 1 0')
-        jointy.appendChild(axis)
-
-        self.add_dynamics(urdf, jointy)
-        self.add_limits(urdf, jointy)
-        robot.appendChild(jointy)
-
-        linky = urdf.createElement('link')
-        linky.setAttribute('name', 'link%s_y' % tree_node)
-        self.add_inertial(urdf, linky)
-        robot.appendChild(linky)
+        link_base = urdf.createElement('link')
+        link_base.setAttribute('name', 'link%s_base'%(tree_node))
+        self.add_inertial(urdf, link_base)
+        robot.appendChild(link_base) 
 
         for child in children:
+            jointx = urdf.createElement('joint')
+            jointx.setAttribute('name', 'joint%s_x_to_%s'%(tree_node,child))
+            self.name_dict["joints"].append('joint%s_x_to_%s'%(tree_node,child))
+            jointx.setAttribute('type', 'revolute')
+            self.add_safety_controller(urdf, jointx)
+            joint_parent = urdf.createElement('parent')
+            joint_parent.setAttribute('link', 'link%s_base'%tree_node)
+            jointx.appendChild(joint_parent)
+            #jointx.appendChild(joint_parent)
+
+            joint_child = urdf.createElement('child')
+            joint_child.setAttribute('link', 'link%s_x_to_%s'%(tree_node,child))
+            jointx.appendChild(joint_child)
+
+            origin = urdf.createElement('origin')
+            origin.setAttribute('xyz', '0 0 0')
+            origin.setAttribute('rpy', '0 0 0')
+            jointx.appendChild(origin)
+
+            axis = urdf.createElement('axis')
+            axis.setAttribute('xyz', '1 0 0')
+            jointx.appendChild(axis)
+
+            self.add_dynamics(urdf, jointx)
+            self.add_limits(urdf, jointx)
+            robot.appendChild(jointx)
+
+            linkx = urdf.createElement('link')
+            linkx.setAttribute('name', 'link%s_x_to_%s'%(tree_node,child))
+            self.add_inertial(urdf, linkx)
+            robot.appendChild(linkx)
+
+            jointy = urdf.createElement('joint')
+            jointy.setAttribute('name', 'joint%s_y_to_%s' % (tree_node,child))
+            self.name_dict["joints"].append('joint%s_y_to_%s'%(tree_node,child))
+            jointy.setAttribute('type', 'revolute')
+            self.add_safety_controller(urdf, jointy)
+            joint_parent = urdf.createElement('parent')
+            joint_parent.setAttribute('link', 'link%s_x_to_%s' % (tree_node,child))
+            jointy.appendChild(joint_parent)
+
+            joint_child = urdf.createElement('child')
+            joint_child.setAttribute('link', 'link%s_y_to_%s' % (tree_node,child))
+            jointy.appendChild(joint_child)
+
+            origin = urdf.createElement('origin')
+            origin.setAttribute('xyz', '0 0 0')
+            origin.setAttribute('rpy', '0 0 0')
+            jointy.appendChild(origin)
+
+            axis = urdf.createElement('axis')
+            axis.setAttribute('xyz', '0 1 0')
+            jointy.appendChild(axis)
+
+            self.add_dynamics(urdf, jointy)
+            self.add_limits(urdf, jointy)
+            robot.appendChild(jointy)
+
+            linky = urdf.createElement('link')
+            linky.setAttribute('name', 'link%s_y_to_%s' % (tree_node,child))
+            self.add_inertial(urdf, linky)
+            robot.appendChild(linky)
+
             jointz = urdf.createElement('joint')
             jointz.setAttribute('name', 'joint%s_z_to_%s' % (tree_node,child))
+            self.name_dict["joints"].append('joint%s_z_to_%s' % (tree_node,child))
             jointz.setAttribute('type', 'revolute')
             self.add_safety_controller(urdf, jointz)
             joint_parent = urdf.createElement('parent')
-            joint_parent.setAttribute('link', 'link%s_y' % tree_node)
+            joint_parent.setAttribute('link', 'link%s_y_to_%s' % (tree_node,child))
             jointz.appendChild(joint_parent)
 
             joint_child = urdf.createElement('child')
@@ -394,6 +433,7 @@ class TreeGenerator(object):
 
         link = urdf.createElement('link')
         link.setAttribute('name', 'link_%s_to_%s'%(parent, child))
+        self.name_dict["links"].append('link_%s_to_%s'%(parent, child))
 
         visual = urdf.createElement('visual')
         self.add_origin(urdf, visual, xyz_offset, rpy_rotations)
@@ -426,64 +466,150 @@ class TreeGenerator(object):
         geometry.appendChild(cylinder)
         parent.appendChild(geometry)
 
+    # CURRENT THEORY: Isaacgym interprets the rpy rotations as rotation around the GLOBAL x y and z axis
     def calculate_rpy(self, parent, child):
+        #Z_tmp = np.array([self.tree_points[child][1], self.tree_points[child][0], self.tree_points[child][2]]) - np.array([self.tree_points[parent][1], self.tree_points[parent][0], self.tree_points[parent][2]]) 
         Z_tmp = self.tree_points[child] - self.tree_points[parent]
         Z = Z_tmp/np.linalg.norm(Z_tmp)
 
-        X_tmp = np.array([-Z[1]/Z[2], 1, 0])
-        X = X_tmp/np.linalg.norm(X_tmp)
+        if Z[2] == 1 and Z[1] == 0 and Z[0] == 0:
+            X = np.array([1,0,0])
+        else:
+            X_tmp = np.cross(Z, np.array([0,0,1])) #np.array([-Z[1]/Z[2], 1, 0])
+            X = X_tmp/np.linalg.norm(X_tmp)
 
         Y_tmp = np.cross(Z, X)
         Y = Y_tmp/np.linalg.norm(Y_tmp)
 
-        r = np.arctan2(-Z[1], Z[2])
-        p = np.arcsin(Z[0])
-        y = np.arctan2(-Y[0], X[0])
+        R = np.vstack((X,Y,Z))
+        R = np.transpose(R)
+        #print(R)
+        #print(R[2][0])
+
+        rot = Rotation.from_matrix(R)
+        rot_eul = rot.as_euler("xyz")
+
+        #print(rot_eul)
+
+        #p = np.arcsin(-R[2][0])
+        #r = np.arcsin(R[2][1]/np.cos(p))
+        #y = np.arcsin(R[1][0]/np.cos(p))
+
+        #theta = np.arccos((np.trace(R)-1)/2)
+
+        #if np.sin(theta) != 0:
+        #    p = -((Y[2]-Z[1])/2*np.sin(theta))*theta
+        #    y = ((Z[0]-X[2])/2*np.sin(theta))*theta
+        #    r = -((X[1]-Y[0])/2*np.sin(theta))*theta
+        #else:
+        #    r = 0
+        #    p = 0
+        #    y = 0
+
+        # X-Z-Y 
+        #r = np.arctan2(Y[2], Y[1])
+        #y = np.arctan2(-Y[0], np.sqrt(1-Y[0]**2)) #np.arcsin(-Y[0])
+        #p = np.arctan2(Z[0], X[0])
+
+        # X-Y-Z (Incorrect order)
+        #r = np.arctan2(-Z[1], Z[2])
+        #y = np.arctan2(Z[0], np.sqrt(1-Z[0]**2)) #np.arcsin(Z[0])
+        #p = np.arctan2(-Y[0], X[0])
+
+        # Y-X-Z (Incorrect order)
+        #r = np.arctan2(Z[0], Z[2])
+        #y = np.arctan2(-Z[1], np.sqrt(1-Z[1]**2)) #np.arcsin(-Z[1])
+        #p = np.arctan2(X[1], Y[1])
+
+        # Y-Z-X
+        #r = np.arctan2(-X[2], X[0])
+        #y = np.arctan2(X[1], np.sqrt(1-X[1]**2)) #np.arcsin(X[1])
+        #p = np.arctan2(-Z[1], Y[1])
+
+        # Z-Y-X
+        #r = np.arctan2(X[1], X[0])
+        #y = np.arctan2(-X[2], np.sqrt(1-X[2]**2)) #np.arcsin(-X[2])
+        #p = np.arctan2(Y[2], Z[2])
+
+        # Z-X-Y
+        #r = np.arctan2(-Y[0], Y[1])
+        #y = np.arctan2(Y[2], np.sqrt(1-Y[2]**2)) #np.arcsin(Y[2])
+        #p = np.arctan2(-X[2], Z[2])
+
+        # X-Z-X
+        #r = np.arctan2(X[2], X[1])
+        #y = np.arctan2(np.sqrt(1-X[0]**2), X[0])
+        #p = np.arctan2(Z[0], -Y[0])
+
+        # X-Y-X
+        #r = np.arctan2(X[1], -X[2])
+        #y = np.arctan2(np.sqrt(1-X[0]**2), X[0])
+        #p = np.arctan2(Y[0], Z[0])
+
+        # Y-X-Y
+        #r = np.arctan2(Y[0], Y[2])
+        #y = np.arctan2(np.sqrt(1-Y[1]**2), Y[1])
+        #p = np.arctan2(X[1], -Y[2])
+
+        # Y-Z-Y
+        #r = np.arctan2(Y[2], -Y[0])
+        #y = np.arctan2(np.sqrt(1-Y[1]**2), Y[1])
+        #p = np.arctan2(Z[1], X[1])
+
+        # Z-Y-Z
+        #r = np.arctan2(Z[1], Z[0])ww
+        #y = np.arctan2(np.sqrt(1-Z[2]**2), Z[2])
+        #p = np.arctan2(Y[2], -X[2])
+
+        # Z-X-Z
+        #r = np.arctan2(Z[0], -Z[1])
+        #y = np.arctan2(np.sqrt(1-Z[2]**2), Z[2])
+        #p = np.arctan2(X[2], Y[2])
+
+        #offsets = self.tree_points[child] - self.tree_points[parent]
+        #offsets = offsets/2
+        #if offsets[2] < 0:
+        #    if offsets[0] < 0:
+        #        r = - (self.calculate_angle(offsets[1], np.linalg.norm(offsets)) - np.pi/2)
+        #        p = - self.calculate_angle(offsets[0], np.linalg.norm(offsets))
+        #        y = 0
+        #    else:
+        #        r = - (self.calculate_angle(offsets[1], np.linalg.norm(offsets)) + np.pi/2) 
+        #        p = - self.calculate_angle(offsets[0], np.linalg.norm(offsets))
+        #        y = 0
+        #else:
+        #    r = -self.calculate_angle(offsets[1], np.linalg.norm(offsets))
+        #    p = self.calculate_angle(offsets[0], np.linalg.norm(offsets))
+        #    y = 0
+        r = rot_eul[0]
+        p = rot_eul[1]
+        y = rot_eul[2]
 
         return [r,p,y]
+        #return [r,p,-y]
+        #return [r,-p,y]
+        #return [r,-p,-y]
+        #return [-r,p,y]
+        #return [-r,p,-y]
+        #return [-r,-p,y]
+        #return [-r,-p,-y]
 
-    def calculate_rotational_vector(self, offsets):
-        # offset[1] = gegenkathete
-        # offset[0] = ankathete
+    def calculate_angle(self, delta, dist):
         rot_vec = 0
-        if offsets[0] != 0:
-            rot_vec = np.arctan(offsets[1]/offsets[0])
-            if offsets[0] < 0:
-                if offsets[1] > 0:
-                    rot_vec = rot_vec-np.pi/2
-                else:
-                    rot_vec += np.pi/2 #rotate everything by 180 degrees
-
-        """
-        else:
-            rot_vec = 0
-        if offsets[0] < 0:
-            if offsets[1] < 0:
-                rot_vec += 3.14159
-            elif offsets[1] == 0:
-                rot_vec = 4.71239
-            else:
-                rot_vec += 4.71239
-        elif offsets[0] == 0:
-            if offsets[1] < 0:
-                rot_vec = 3.14159
-            else:
-                rot_vec = 0
-        else:
-            if offsets[1] < 0:
-                rot_vec += 1.5708
-            elif offsets[1] == 0:
-                rot_vec = 1.5708
-            else:
-                rot_vec += 0
-        """
+        if dist != 0:
+            rot_vec = np.arcsin(delta/dist)
+        #    if offsets[0] < 0:
+        #        if offsets[1] > 0:
+        #            rot_vec = rot_vec - np.pi/2
+        #        else:
+        #            rot_vec += np.pi/2
         return rot_vec
-
 
     def generate_ground(self, urdf, robot):
         link = urdf.createElement('link')
         link.setAttribute('name', 'base_link')
         robot.appendChild(link)
+        self.name_dict["links"].append("base_link")
 
         visual = urdf.createElement('visual')
         link.appendChild(visual)
@@ -512,6 +638,96 @@ class TreeGenerator(object):
         boxc.setAttribute('size', '%s %s 0.02' % (1 * self.scaling, 1 * self.scaling))
         geometryc.appendChild(boxc)
         collision.appendChild(geometryc)
+
+    def calc_edge_tuples(self):
+        edge_tuples = []
+        for parent in self.edges.keys():
+            for child in self.edges[parent]:
+                edge_tuples.append((parent, child))
+        return edge_tuples
+
+    # has to be executed after the urdf was created
+    def generate_yaml(self):
+        file_object = {}
+        file_object["scene"] = {}
+        file_object["scene"]["n_envs"] = 1
+        file_object["scene"]["es"] = 1
+        file_object["scene"]["gui"] = 1
+
+        file_object["scene"]["cam"] = {}
+        file_object["scene"]["cam"]["cam_pos"] = [5, 0, 5]
+        file_object["scene"]["cam"]["look_at"] = [0, 0, 0]
+
+        file_object["scene"]["gym"] = {}
+        file_object["scene"]["gym"]["dt"] = 0.01
+        file_object["scene"]["gym"]["substeps"] = 2
+        file_object["scene"]["gym"]["up_axis"] = "z"
+        file_object["scene"]["gym"]["type"] = "physx"
+        file_object["scene"]["gym"]["use_gpu_pipeline"] = True
+
+        file_object["scene"]["gym"]["physx"] = {}
+        file_object["scene"]["gym"]["physx"]["solver_type"] = 1
+        file_object["scene"]["gym"]["physx"]["num_position_iterations"] = 8
+        file_object["scene"]["gym"]["physx"]["num_velocity_iterations"] = 1
+        file_object["scene"]["gym"]["physx"]["rest_offset"] = 0.0
+        file_object["scene"]["gym"]["physx"]["contact_offset"] = 0.001
+        file_object["scene"]["gym"]["physx"]["friction_offset_threshold"] = 0.001
+        file_object["scene"]["gym"]["physx"]["friction_correlation_distance"] = 0.0005
+        file_object["scene"]["gym"]["physx"]["use_gpu"] = True
+
+        file_object["scene"]["gym"]["device"] = {}
+        file_object["scene"]["gym"]["device"]["compute"] = 0
+        file_object["scene"]["gym"]["device"]["graphics"] = 0
+
+        file_object["scene"]["gym"]["plane"] = {}
+        file_object["scene"]["gym"]["plane"]["dynamic_friction"] = 0.4
+        file_object["scene"]["gym"]["plane"]["static_friction"] = 0
+        file_object["scene"]["gym"]["plane"]["restitution"] = 0
+
+        file_object["tree"] = {}
+
+        file_object["tree"]["asset_options"] = {}
+        file_object["tree"]["asset_options"]["fix_base_link"] = True
+        file_object["tree"]["asset_options"]["flip_visual_attachments"] = True
+        file_object["tree"]["asset_options"]["armature"] = 0.01
+        file_object["tree"]["asset_options"]["max_linear_velocity"] = 100.0
+        file_object["tree"]["asset_options"]["max_angular_velocity"] = 40.0
+        file_object["tree"]["asset_options"]["disable_gravity"] = True
+
+        file_object["tree"]["attractor_props"] = {}
+        file_object["tree"]["attractor_props"]["stiffness"] = 0
+        file_object["tree"]["attractor_props"]["damping"] = 0
+
+        file_object["tree"]["shape_props"] = {}
+        file_object["tree"]["shape_props"]["thickness"] = 1e-3
+
+        file_object["tree"]["dof_props"] = {}
+        stiffness_list = []
+        for name in self.name_dict["joints"]:
+            name_lst = name.split("_")
+            joint_idx = int(name_lst[0][5:])
+            child_idx = int(name_lst[-1])
+            parent = self.find_parent(joint_idx)
+            
+            length = np.linalg.norm(self.tree_points[child_idx] - self.tree_points[joint_idx])
+            #print("lenght for node %s: %s"%(joint_idx,length))
+
+            thickness = self.branch_thickness_dict[child_idx]*2 #use thickness of outgoing edge for stiffness calc
+
+            stiffness_factor = thickness**4 #/(length**3) # <-- lenght factor should be taken care of by physical simulation from isaacgym
+            stiffness = STIFFNESS_BASE * stiffness_factor
+            #print(stiffness)
+            stiffness_list.append(stiffness)
+
+        file_object["tree"]["dof_props"]["stiffness"] = stiffness_list #[30] * (len(self.name_dict["joints"])) # -len(self.tree_points)
+        file_object["tree"]["dof_props"]["damping"] = [25] * (len(self.name_dict["joints"])) # -len(self.tree_points)
+        file_object["tree"]["dof_props"]["effort"] = [87] * (len(self.name_dict["joints"])) # -len(self.tree_points)
+
+        with open("tree%s.yaml"%self.tree_id, "w") as f:
+            yaml.dump(file_object, f)
+
+        return os.path.abspath("tree%s.yaml"%self.tree_id)
+
 
 
 #fig = plt.figure()
