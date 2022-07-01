@@ -10,6 +10,8 @@ import yaml
 
 BATCH_SIZE = 1
 STIFFNESS_BASE = 11000
+SIMULATION_STEP_SIZE = 0.01
+GUI_ON = 0
 
 def sphere(pt, a=1.0, b=1.0, c=1.0):
     r = (pt[0]-0.5)**2*a + (pt[1]-0.5)**2*b + (pt[2]-0.5)**2*c
@@ -18,7 +20,7 @@ def sphere(pt, a=1.0, b=1.0, c=1.0):
 
 class TreeGenerator(object):
 
-    def __init__(self, att_pts_max, scaling, offset, da, dt, max_steps, step_width, max_tree_points, tip_radius, att_env_shape_funct=sphere, tree_id=0, pipe_model_exponent=2, att_pts_min=None, x_strech=1, y_strech=1, z_strech=1, step_width_scaling=1):
+    def __init__(self, att_pts_max, scaling, offset, da, dt, max_steps, step_width, max_tree_points, tip_radius, att_env_shape_funct=sphere, tree_id=0, pipe_model_exponent=2, att_pts_min=None, x_strech=1, y_strech=1, z_strech=1, step_width_scaling=1, env_num=1):
         """
 
         :param att_pts_max: maximum number of attraction points. for further info see initialize_att_pts
@@ -52,6 +54,7 @@ class TreeGenerator(object):
         self.pipe_model_exponent = pipe_model_exponent
         self.step_width_scaling = step_width_scaling
         self.name_dict = {"joints":[], "links":[]}
+        self.env_num = env_num
 
     def min_da(self):
         min_da = None
@@ -650,16 +653,16 @@ class TreeGenerator(object):
     def generate_yaml(self):
         file_object = {}
         file_object["scene"] = {}
-        file_object["scene"]["n_envs"] = 1
+        file_object["scene"]["n_envs"] = self.env_num
         file_object["scene"]["es"] = 1
-        file_object["scene"]["gui"] = 1
+        file_object["scene"]["gui"] = GUI_ON
 
         file_object["scene"]["cam"] = {}
         file_object["scene"]["cam"]["cam_pos"] = [5, 0, 5]
         file_object["scene"]["cam"]["look_at"] = [0, 0, 0]
 
         file_object["scene"]["gym"] = {}
-        file_object["scene"]["gym"]["dt"] = 0.01
+        file_object["scene"]["gym"]["dt"] = SIMULATION_STEP_SIZE
         file_object["scene"]["gym"]["substeps"] = 2
         file_object["scene"]["gym"]["up_axis"] = "z"
         file_object["scene"]["gym"]["type"] = "physx"
@@ -719,14 +722,15 @@ class TreeGenerator(object):
             #print(stiffness)
             stiffness_list.append(stiffness)
 
+        damping_list = [25] * (len(self.name_dict["joints"])) 
         file_object["tree"]["dof_props"]["stiffness"] = stiffness_list #[30] * (len(self.name_dict["joints"])) # -len(self.tree_points)
-        file_object["tree"]["dof_props"]["damping"] = [25] * (len(self.name_dict["joints"])) # -len(self.tree_points)
+        file_object["tree"]["dof_props"]["damping"] = damping_list # -len(self.tree_points)
         file_object["tree"]["dof_props"]["effort"] = [87] * (len(self.name_dict["joints"])) # -len(self.tree_points)
 
         with open("tree%s.yaml"%self.tree_id, "w") as f:
             yaml.dump(file_object, f)
 
-        return os.path.abspath("tree%s.yaml"%self.tree_id)
+        return os.path.abspath("tree%s.yaml"%self.tree_id), stiffness_list, damping_list
 
 
 
