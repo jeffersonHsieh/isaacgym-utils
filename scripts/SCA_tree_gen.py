@@ -55,6 +55,7 @@ class TreeGenerator(object):
         self.step_width_scaling = step_width_scaling
         self.name_dict = {"joints":[], "links":[]}
         self.env_num = env_num
+        self.edge_list = []
 
     def min_da(self):
         min_da = None
@@ -233,14 +234,24 @@ class TreeGenerator(object):
             for child in children:
                 self.generate_link(urdf, robot, node_index, child)
 
-
+        self.clean_edge_list()
         tree_string = urdf.toprettyxml(indent='\t')
         save_path_file = "tree%s.urdf" % self.tree_id
 
         with open(save_path_file, "w") as f:
             f.write(tree_string)
 
-        return self.name_dict, os.path.abspath(save_path_file)
+        return self.name_dict, self.edge_list, os.path.abspath(save_path_file)
+
+    def clean_edge_list(self):
+        for parent, child in self.edge_list:
+            if isinstance(parent, str):
+                print("removed (%s, %s)"%(parent, child))
+                self.edge_list.remove((parent,child))
+                parent_idx = self.name_dict["links"].index(parent) 
+                self.edge_list.append((parent_idx,child))
+                print("added (%s, %s)"%(parent_idx, child))
+
 
     def generate_color_definitions(self, urdf, robot):
         for name, rgba in [("blue", "0 0 0.8 1"), ("green", "0 0.6 0 0.8"), ("brown", "0.3 0.15 0.05 1.0")]:
@@ -318,20 +329,69 @@ class TreeGenerator(object):
             joint_parent.setAttribute('link', 'link_%s_to_%s'%(parent,tree_node))
         jointbase.appendChild(joint_parent)
 
-        joint_child = urdf.createElement('child')
-        joint_child.setAttribute('link', 'link%s_base'%(tree_node))
-        jointbase.appendChild(joint_child)
-        robot.appendChild(jointbase)
-
         origin = urdf.createElement('origin')
         origin.setAttribute('xyz', '%s %s %s'%(joint_one_offset[0], joint_one_offset[1], joint_one_offset[2]))
         origin.setAttribute('rpy', '0 0 0')
         jointbase.appendChild(origin)
 
-        link_base = urdf.createElement('link')
-        link_base.setAttribute('name', 'link%s_base'%(tree_node))
-        self.add_inertial(urdf, link_base)
-        robot.appendChild(link_base) 
+        if len(children) == 0:
+            joint_child = urdf.createElement('child')
+            joint_child.setAttribute('link', 'link%s_tip'%(tree_node))
+            jointbase.appendChild(joint_child)
+            robot.appendChild(jointbase)
+
+            link_base = urdf.createElement('link')
+            link_base.setAttribute('name', 'link%s_tip'%(tree_node))
+            
+            visual = urdf.createElement('visual')
+            self.add_origin(urdf, visual, [0,0,0], [0,0,0])
+            geometry = urdf.createElement('geometry')
+            box = urdf.createElement('box')
+            box.setAttribute('size', '%s %s %s' % (self.tip_radius, self.tip_radius, self.tip_radius))
+            geometry.appendChild(box)
+            visual.appendChild(geometry)
+
+            material = urdf.createElement('material')
+            material.setAttribute('name', 'green')
+            visual.appendChild(material)
+
+            link_base.appendChild(visual)
+
+            collision = urdf.createElement('collision')
+            self.add_origin(urdf, collision, [0,0,0], [0,0,0])
+            geometry = urdf.createElement('geometry')
+            box = urdf.createElement('box')
+            box.setAttribute('size', '%s %s %s' % (self.tip_radius, self.tip_radius, self.tip_radius))
+            geometry.appendChild(box)
+            collision.appendChild(geometry)
+
+            link_base.appendChild(collision)
+
+            robot.appendChild(link_base)
+
+            self.name_dict["links"].append('link%s_tip'%(tree_node)) 
+
+            incoming_edge_name = 'link_%s_to_%s'%(parent,tree_node)
+            if incoming_edge_name in self.name_dict["links"]:
+                incoming_edge_idx = self.name_dict["links"].index(incoming_edge_name) # extract index of incoming edge
+                my_edge_idx = len(self.name_dict["links"])-1 # extract index of added link (last added element)
+                self.edge_list.append((incoming_edge_idx, my_edge_idx))
+            else:
+                print("edge name not found. Adding dirty edge")
+                my_edge_idx = len(self.name_dict["links"])-1 # extract index of added link (last added element)
+                self.edge_list.append((incoming_edge_name,my_edge_idx))
+                parent_idx = self.edge_list.index(incoming_edge_name)
+
+        else:
+            joint_child = urdf.createElement('child')
+            joint_child.setAttribute('link', 'link%s_base'%(tree_node))
+            jointbase.appendChild(joint_child)
+            robot.appendChild(jointbase)
+
+            link_base = urdf.createElement('link')
+            link_base.setAttribute('name', 'link%s_base'%(tree_node))
+            self.add_inertial(urdf, link_base)
+            robot.appendChild(link_base) 
 
         for child in children:
             jointx = urdf.createElement('joint')
@@ -437,6 +497,20 @@ class TreeGenerator(object):
         link = urdf.createElement('link')
         link.setAttribute('name', 'link_%s_to_%s'%(parent, child))
         self.name_dict["links"].append('link_%s_to_%s'%(parent, child))
+        parents_parent = self.find_parent(parent) # extract ID of the parents parent
+        if parents_parent is not None:
+            incoming_edge_name = "link_%s_to_%s"%(parents_parent, parent)
+        else:
+            incoming_edge_name = "base_link"
+
+        if incoming_edge_name in self.name_dict["links"]:
+            incoming_edge_idx = self.name_dict["links"].index(incoming_edge_name) # extract index of incoming edge
+            my_edge_idx = len(self.name_dict["links"])-1 # extract index of added link (last added element)
+            self.edge_list.append((incoming_edge_idx, my_edge_idx))
+        else:
+            print("edge name not found. Adding dirty edge")
+            my_edge_idx = len(self.name_dict["links"])-1 # extract index of added link (last added element)
+            self.edge_list.append((incoming_edge_name,my_edge_idx))
 
         visual = urdf.createElement('visual')
         self.add_origin(urdf, visual, xyz_offset, rpy_rotations)

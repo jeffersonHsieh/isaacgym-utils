@@ -4,9 +4,9 @@ import multiprocessing
 import SCA_tree_gen as sca
 import franka_import_tree_multi_env as fit
 
-TREE_NUM = 100
+TREE_NUM = 10
 ENV_NUM = 100
-MAX_TREE_POINTS = 12
+MAX_TREE_POINTS = 15
 TRUNK_HEIGHT_FACTORS = [1,2]
 SCALING = 2
 PIPE_MODEL_EXPONENT = 3 #suggested values: 2 or 3
@@ -35,7 +35,7 @@ while tree < TREE_NUM:
     tg = sca.TreeGenerator(max_steps=10000, att_pts_max=att_pts_max, da=d_attraction, dt=d_termination, step_width=STEP_WIDTH, offset=[-0.5, -0.5, trunk_height], scaling=SCALING, max_tree_points=MAX_TREE_POINTS, tip_radius=0.1, tree_id=tree, pipe_model_exponent=PIPE_MODEL_EXPONENT, z_strech=height_strech, y_strech=width_strech, x_strech=width_strech, step_width_scaling=0.65, env_num = ENV_NUM)
     tg.generate_tree()
     tg.calculate_branch_thickness()
-    name_dict, urdf_path = tg.generate_urdf()
+    name_dict, edge_def, urdf_path = tg.generate_urdf()
     #urdf_paths.append(urdf_path)
     #name_dicts.append(name_dict)
     #urdf_path = "/home/jan-malte/Tree_Deformation_Project/isaacgym-utils/scripts/test1.urdf"
@@ -43,11 +43,13 @@ while tree < TREE_NUM:
     yaml_path, stiffness_list, damping_list = tg.generate_yaml()
     #yaml_paths.append(yaml_path)
     #yaml_path = "/home/jan-malte/Tree_Deformation_Project/isaacgym-utils/scripts/test1.yaml"
-    edge_def = tg.calc_edge_tuples()
+    edge_def2 = tg.calc_edge_tuples()
     #edge_defs.append(edge_def)
     #edge_def = [(0, 1), (1, 2)]
     #print("name joints: " + str(len(name_dict["joints"])))
     #print("name links: " + str(len(name_dict["links"])))
+    print(edge_def)
+    print(edge_def2)
 
     fit.import_tree(name_dict, urdf_path, yaml_path, edge_def, stiffness_list, damping_list, tree_num=tree)
 

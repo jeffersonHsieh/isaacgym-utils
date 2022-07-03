@@ -18,7 +18,8 @@ from mpl_toolkits.mplot3d import Axes3D
 from matplotlib.patches import FancyArrowPatch
 from mpl_toolkits.mplot3d import proj3d
 
-DATASET_DIR = "/home/jan-malte/Dataset/"
+DATASET_DIR = "/mnt/hdd/jan-malte/12Nodes_by_tree/"
+TREE_NUM = 10
 
 seed = 0
 np.random.seed(seed)
@@ -39,6 +40,44 @@ class GCNResidualBlock(torch.nn.Module):
         x_block = F.relu(x_block)
         return x_block+x
 
+class FGCNResidualBlock(torch.nn.Module):
+    def __init__(self, hidden_size, p):
+        self.block = GCNResidualBlock(hidden_size)
+        self.bn = torch.nn.BatchNorm1d(hidden_size)
+        self.do = torch.nn.Dropout(p)
+    
+    def forward(self, x, edge_index):
+        x = self.block(x, edge_index)
+        x = self.bn(x)
+        x = self.do(x)
+        return x
+
+class FGCN(torch.nn.Module):
+    def __init__(self, n_graph_nodes):
+        super().__init__()
+        hidden_size = 1280 #might need to be adjusted?
+        p = 0.4
+        self.stem = torch.nn.Sequential(
+            torch.nn.Linear(10, hidden_size),
+            torch.nn.ReLU(),
+        )
+
+        for idx in range(0,n_graph_nodes):
+            self.add_module(FGCNResidualBlock(hidden_size,p), "block%s"%idx)
+
+        self.out = torch.nn.Sequential(
+            torch.nn.Linear(hidden_size, 7)
+        )
+
+    def forward(self, data):
+        x, edge_index = data.x, data.edge_index
+        x = self.stem(x)
+
+        for block in self.children():
+            x = block(x, edge_index)
+
+        x = self.out(x)        
+        return x
 
 # Residual connection
 # Needs to be adjusted to allow for larger number (>5) of Tree Nodes 
@@ -129,8 +168,8 @@ def train(model, optimizer, criterion, train_loader, epoch, device):
         optimizer.step()
         running_loss += loss.item()
     train_loss = running_loss/len(train_loader)
-    #if epoch%10==0:
-    #    print('[EPOCH {}] Train loss: {}'.format(epoch, train_loss))
+    if epoch%10==0:
+        print('[EPOCH {}] Train loss: {}'.format(epoch, train_loss))
     return train_loss
 
 def validate(model, criterion, val_loader, epoch, device):
@@ -145,8 +184,8 @@ def validate(model, criterion, val_loader, epoch, device):
         #loss = criterion(out[:,:3], batch.y[:,:3])
         #running_loss += loss.item()
     val_loss = running_l2_norm/num_graphs
-    #if epoch%10==0:
-    #    print('[EPOCH {}] Validation loss: {}'.format(epoch, val_loss))
+    if epoch%10==0:
+        print('[EPOCH {}] Validation loss: {}'.format(epoch, val_loss))
     return val_loss
 
 def test(model, test_loader, device):
@@ -491,13 +530,13 @@ def rotate_augment(X_edges, X_force, X_pos, Y_pos, rotate_augment_factor=5, stdd
             
     return new_X_edges, new_X_force, new_X_pos, new_Y_pos
 
-def load_npy(data_dir):
+def load_npy(data_dir, tree_num):
     # Load npy files from dataset_dir. A shortcut to 'sample_1_push' shared folder has been added to 'My Drive' 
-    X_stiffness_damping = np.load(os.path.join(data_dir, 'X_coeff_stiff_damp.npy'))
-    X_edges = np.load(os.path.join(data_dir, 'X_edge_def.npy'))
-    X_force = np.load(os.path.join(data_dir, 'X_force_applied.npy'))
-    X_pos = np.load(os.path.join(data_dir, 'X_vertex_init_pose.npy'))
-    Y_pos = np.load(os.path.join(data_dir, 'Y_vertex_final_pos.npy'))
+    X_stiffness_damping = np.load(os.path.join(data_dir, 'X_coeff_stiff_damp_tree%s.npy'%tree_num))
+    X_edges = np.load(os.path.join(data_dir, 'X_edge_def_tree%s.npy'%tree_num))
+    X_force = np.load(os.path.join(data_dir, 'X_force_applied_tree%s_clean.npy'%tree_num))
+    X_pos = np.load(os.path.join(data_dir, 'X_vertex_init_tree%s_clean.npy'%tree_num))
+    Y_pos = np.load(os.path.join(data_dir, 'Y_vertex_final_tree%s_clean.npy'%tree_num))
 
     # Truncate node orientations and tranpose to shape (num_graphs, num_nodes, 3)
     X_pos = X_pos[:, :7, :].transpose((0,2,1))
@@ -541,39 +580,49 @@ def shuffle_in_unison(a,b,c):
 
 ##### FUNCTION DEF END #####
 
-# Loading Dataset
-X_force_list = []
-X_pos_list = []
-Y_pos_list = []
+# Loading Datase
 
 d = DATASET_DIR # Assumes all trees in one dataset (no Iteration needed)
-X_edges, X_force, X_pos, Y_pos = load_npy(d)
-X_force_list.append(X_force)
-X_pos_list.append(X_pos)
-Y_pos_list.append(Y_pos)
-X_force_arr = np.concatenate(X_force_list)
-X_pos_arr = np.concatenate(X_pos_list)
-Y_pos_arr = np.concatenate(Y_pos_list)
 
+dataset = []
+for tree in range(0, TREE_NUM):
+    X_force_list = []
+    X_pos_list = []
+    Y_pos_list = []
+    X_edges, X_force, X_pos, Y_pos = load_npy(d, tree)
+    X_force_list.append(X_force)
+    X_pos_list.append(X_pos)
+    Y_pos_list.append(Y_pos)
+    X_force_arr = np.concatenate(X_force_list)
+    X_pos_arr = np.concatenate(X_pos_list)
+    Y_pos_arr = np.concatenate(Y_pos_list)
+    dataset_tree = make_dataset(X_edges, X_force_arr, X_pos_arr, Y_pos_arr, 
+                                make_directed=True, prune_augmented=False, rotate_augmented=False)
+    dataset = dataset + dataset_tree
+
+print(np.shape(dataset))
 # Shuffle Dataset
-X_force_arr, X_pos_arr, Y_pos_arr = shuffle_in_unison(X_force_arr, X_pos_arr, Y_pos_arr)
+#X_force_arr, X_pos_arr, Y_pos_arr = shuffle_in_unison(X_force_arr, X_pos_arr, Y_pos_arr)
+random.shuffle(dataset)
 
 # setup validation/test split
-train_val_split = int(len(X_force_arr)*0.9)
+train_val_split = int(len(dataset)*0.9)
 
-X_force_train = X_force_arr[:train_val_split] 
-X_pos_train = X_pos_arr[:train_val_split] 
-Y_pos_train = Y_pos_arr[:train_val_split] 
+train_dataset = dataset[:train_val_split]
+val_dataset = dataset[train_val_split:]
+#X_force_train = X_force_arr[:train_val_split] 
+#X_pos_train = X_pos_arr[:train_val_split] 
+#Y_pos_train = Y_pos_arr[:train_val_split] 
 
-X_force_val = X_force_arr[train_val_split:] 
-X_pos_val = X_pos_arr[train_val_split:] 
-Y_pos_val = Y_pos_arr[train_val_split:] 
+#X_force_val = X_force_arr[train_val_split:] 
+#X_pos_val = X_pos_arr[train_val_split:] 
+#Y_pos_val = Y_pos_arr[train_val_split:] 
 
 # generate validation/test datasets
-train_dataset = make_dataset(X_edges, X_force_train, X_pos_train, Y_pos_train, 
-                 make_directed=True, prune_augmented=True, rotate_augmented=True)
-val_dataset = make_dataset(X_edges, X_force_val, X_pos_val, Y_pos_val, 
-                 make_directed=True, prune_augmented=False, rotate_augmented=False)
+#train_dataset = make_dataset(X_edges, X_force_train, X_pos_train, Y_pos_train, 
+#                 make_directed=True, prune_augmented=False, rotate_augmented=False)
+#val_dataset = make_dataset(X_edges, X_force_val, X_pos_val, Y_pos_val, 
+#                 make_directed=True, prune_augmented=False, rotate_augmented=False)
 
 # check validation dataset?
 #print(val_dataset[0])
@@ -597,11 +646,15 @@ for batch in train_loader:
     print(batch)
     print('Number of graphs in batch: ', batch.num_graphs) 
 
-for i in range(10):
+for i in range(10): #Investigate this function. Generates oddly shaped "trees". find out wether this loop is at fault or if the dataset is imported wrong
     X = val_dataset[i].x[:,:3]
+    #print(val_dataset[i].x[:,:3])
     Y = val_dataset[i].y[:,:3]
+    #print(val_dataset[i].y[:,:3])
     force_node = val_dataset[i].force_node
+    #print(force_node)
     edge_index = val_dataset[i].edge_index
+    #print(edge_index)
     force = val_dataset[i].x[:,-3:]
     visualize_graph(X, Y, X, edge_index, force_node, force)
 
