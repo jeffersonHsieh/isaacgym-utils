@@ -17,6 +17,7 @@ from matplotlib.lines import Line2D
 from mpl_toolkits.mplot3d import Axes3D
 from matplotlib.patches import FancyArrowPatch
 from mpl_toolkits.mplot3d import proj3d
+import argparse
 
 DATASET_DIR = "/mnt/hdd/jan-malte/8Nodes_by_tree/"
 TREE_NUM = 36
@@ -718,9 +719,17 @@ def get_dataset_metrics(dataset):
 
 ##### FUNCTION DEF END #####
 
+parser = argparse.ArgumentParser()
+parser.add_argument("-dir", type=str, dest="file_directory")
+parser.add_argument("-gn", type=int, default=8, dest="graph_nodes") #number of graph nodes
+parser.add_argument("-ep", type=int, default=500, dest="n_epochs") # number of epochs
+parser.add_argument("-pat", type=int, default=50, dest="sched_patience") #patience of scheduler
+parser.add_argument("-nt", type=bool, default=True, dest="node_transform") # if node transform should be performed
+
+args = parser.parse_args()
 # Loading Datase
 
-d = DATASET_DIR 
+d = args.file_directory 
 
 dataset = []
 for tree in range(0, TREE_NUM):
@@ -735,7 +744,7 @@ for tree in range(0, TREE_NUM):
     X_pos_arr = np.concatenate(X_pos_list)
     Y_pos_arr = np.concatenate(Y_pos_list)
     dataset_tree = make_dataset(X_edges, X_force_arr, X_pos_arr, Y_pos_arr, 
-                                make_directed=True, prune_augmented=False, rotate_augmented=False, just_tree_points=NODE_TRANSFORM)
+                                make_directed=True, prune_augmented=False, rotate_augmented=False, just_tree_points=args.node_transform)
     dataset = dataset + dataset_tree
 
 get_dataset_metrics(dataset)
@@ -802,20 +811,20 @@ ax = fig.add_subplot(111)
 
 # Setup GCN
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-model = FGCN(N_GRAPH_NODES).to(device)
+model = FGCN(args.graph_nodes).to(device)
 #print(model)
 
 optimizer = torch.optim.Adam(model.parameters(), lr=2e-3)
 criterion = torch.nn.MSELoss()
 #criterion = torch.nn.L1Loss()
-scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min', patience=SCHED_PATIENCE, factor=0.5, min_lr=5e-4)
+scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min', patience=args.sched_patience, factor=0.5, min_lr=5e-4)
 
 # Train and validate model
 train_loss_history = []
 val_loss_history = []
 base_loss_history = []
 best_loss = 1e9
-for epoch in range(1, N_EPOCHS):
+for epoch in range(1, args.n_epochs):
     train_loss = train(model, optimizer, criterion, train_loader, epoch, device) #train model
     val_loss, baseline_loss = validate(model, criterion, val_loader, epoch, device) # validate model
     if val_loss<best_loss:
