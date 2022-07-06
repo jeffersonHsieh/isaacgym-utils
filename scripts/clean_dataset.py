@@ -1,7 +1,7 @@
 import numpy as np
-GET_PATH = "/mnt/hdd/jan-malte/12Nodes_by_tree/"
-PUT_PATH = "/mnt/hdd/jan-malte/12Nodes_by_tree/"
-TREE_NUM = 10
+GET_PATH = "/mnt/hdd/jan-malte/15Nodes_Large_by_tree/"
+PUT_PATH = "/mnt/hdd/jan-malte/15Nodes_Large_by_tree/"
+TREE_NUM = 36
 
 for tree in range(0, TREE_NUM):
     x_vert_array = np.load(GET_PATH + 'X_vertex_init_pose_tree%s.npy'%(tree))

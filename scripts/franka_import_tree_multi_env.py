@@ -18,7 +18,7 @@ from isaacgym_utils.draw import draw_transforms, draw_contacts, draw_camera, dra
 import pdb
 import sys
 
-PATH = "/mnt/hdd/jan-malte/15Nodes/" #"/home/jan-malte/Dataset/8Nodes/" #"/home/jan-malte/Dataset/" #"/media/jan-malte/INTENSO/"
+PATH = "/mnt/hdd/jan-malte/15Nodes_Large/" #"/home/jan-malte/Dataset/8Nodes/" #"/home/jan-malte/Dataset/" #"/media/jan-malte/INTENSO/"
 
 def import_tree(name_dict, urdf_path, yaml_path, edge_def, stiffness_list, damping_list, tree_num):
     global no_contact, force, loc_tree, random_index, contact_transform, init_fri, not_saved
@@ -32,7 +32,7 @@ def import_tree(name_dict, urdf_path, yaml_path, edge_def, stiffness_list, dampi
     tree_name = 'tree'
 
     current_iteration = 0
-    num_iteration = 10
+    num_iteration = 100
     force_magnitude = 10
     push_toggle = True
       

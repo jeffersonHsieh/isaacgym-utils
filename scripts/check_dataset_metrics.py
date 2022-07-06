@@ -1,7 +1,7 @@
 import numpy as np
 
 TREE_NUM = 10
-ENV_NUM = 100
+ENV_NUM = 1
 PATH = "/mnt/hdd/jan-malte/12Nodes_by_tree/"
 PER_TREE = True
 CLEAN = "" #"_clean"

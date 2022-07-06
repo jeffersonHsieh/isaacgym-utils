@@ -18,8 +18,12 @@ from mpl_toolkits.mplot3d import Axes3D
 from matplotlib.patches import FancyArrowPatch
 from mpl_toolkits.mplot3d import proj3d
 
-DATASET_DIR = "/mnt/hdd/jan-malte/12Nodes_by_tree/"
-TREE_NUM = 10
+DATASET_DIR = "/mnt/hdd/jan-malte/8Nodes_by_tree/"
+TREE_NUM = 36
+N_GRAPH_NODES = 8
+N_EPOCHS = 10
+NODE_TRANSFORM = False
+SCHED_PATIENCE = 10
 
 seed = 0
 np.random.seed(seed)
@@ -42,6 +46,7 @@ class GCNResidualBlock(torch.nn.Module):
 
 class FGCNResidualBlock(torch.nn.Module):
     def __init__(self, hidden_size, p):
+        super().__init__()
         self.block = GCNResidualBlock(hidden_size)
         self.bn = torch.nn.BatchNorm1d(hidden_size)
         self.do = torch.nn.Dropout(p)
@@ -52,28 +57,30 @@ class FGCNResidualBlock(torch.nn.Module):
         x = self.do(x)
         return x
 
-class FGCN(torch.nn.Module):
+class FGCN(torch.nn.Module): # TODO: flexible in and out layer size depending on if we do branches or points as nodes: (10,7) to (6,3)
     def __init__(self, n_graph_nodes):
         super().__init__()
-        hidden_size = 1280 #might need to be adjusted?
+        hidden_size = 1280 
         p = 0.4
         self.stem = torch.nn.Sequential(
-            torch.nn.Linear(10, hidden_size),
+            torch.nn.Linear(10, hidden_size), 
             torch.nn.ReLU(),
         )
 
-        for idx in range(0,n_graph_nodes):
-            self.add_module(FGCNResidualBlock(hidden_size,p), "block%s"%idx)
+        self.blocks = torch.nn.ModuleList([FGCNResidualBlock(hidden_size,p) for _ in range(0,n_graph_nodes)])
 
         self.out = torch.nn.Sequential(
             torch.nn.Linear(hidden_size, 7)
         )
 
+        
+
     def forward(self, data):
         x, edge_index = data.x, data.edge_index
         x = self.stem(x)
 
-        for block in self.children():
+        idx = 0
+        for block in self.blocks:
             x = block(x, edge_index)
 
         x = self.out(x)        
@@ -163,6 +170,8 @@ def train(model, optimizer, criterion, train_loader, epoch, device):
         optimizer.zero_grad()
         batch.to(device)
         out = model(batch)
+        #print(np.shape(out))
+        #print(np.shape(batch.y))
         loss = criterion(out[:,:7], batch.y[:,:7])
         loss.backward()
         optimizer.step()
@@ -175,37 +184,49 @@ def train(model, optimizer, criterion, train_loader, epoch, device):
 def validate(model, criterion, val_loader, epoch, device):
     model.eval()
     running_l2_norm = 0
+    running_l2_norm_base = 0
     num_graphs = 0
     for batch in val_loader:
         batch.to(device)
         out = model(batch)
+        #print("####################")
+        #print(batch.y[:20,:3])
+        #print("--------------------")
+        #print(out[:20,:3])
+        #print("####################")
         running_l2_norm += torch.sum(torch.norm(out[:,:3]-batch.y[:,:3], dim=1)).item()
+        running_l2_norm_base += torch.sum(torch.norm(batch.x[:,:3]-batch.y[:,:3], dim=1)).item() # compare to baseline where tree was not moved at all
         num_graphs+=out.size()[0]
         #loss = criterion(out[:,:3], batch.y[:,:3])
         #running_loss += loss.item()
     val_loss = running_l2_norm/num_graphs
+    base_loss = running_l2_norm_base/num_graphs
     if epoch%10==0:
         print('[EPOCH {}] Validation loss: {}'.format(epoch, val_loss))
-    return val_loss
+        print("[EPOCH {}] Baseline loss: {}".format(epoch, base_loss))
+    return val_loss, base_loss
 
 def test(model, test_loader, device):
     model.eval()
     running_l2_norm = 0
     num_graphs = 0
+    idx = 0
     for batch in test_loader:
         batch.to(device)
         out = model(batch)
         running_l2_norm += torch.sum(torch.norm(out[:,:3]-batch.y[:,:3], dim=1))
         num_graphs+=out.size()[0]
-        visualize_graph(out[:,:3], 
-                        batch.y[:,:3], 
-                        batch.x[:,:3], 
-                        batch.edge_index, batch.force_node[0], 
-                        batch.x[:,-3:])
+        if idx < 10:
+            visualize_graph(out[:,:3], 
+                            batch.y[:,:3], 
+                            batch.x[:,:3], 
+                            batch.edge_index, batch.force_node[0], 
+                            batch.x[:,-3:])
+        idx += 1
     l2_norm = running_l2_norm/num_graphs
     print('Average node distance error: {}'.format(l2_norm))
 
-def visualize_graph(X, Y, X_0, edge_index, force_node, force):
+def visualize_graph(X, Y, X_0, edge_index, force_node, force): #TODO: check this function. The labelling might be off?
     force = force.detach().cpu().numpy()
     
     force_vector = force[force_node]/np.linalg.norm(force[force_node])/2
@@ -384,6 +405,10 @@ def make_directed_and_prune_augment(X_edges, X_force, X_pos, Y_pos, make_directe
     for i in range(num_graphs):
         # Find the node that force is applied on
         force_index = np.argwhere(np.sum(np.abs(X_force[i]), axis=1))[0,0]
+        #print(X_force[i][force_index])
+        #if i < 5:
+            #print(X_pos[i][:,:3]-Y_pos[i][:,:3])
+            #print(Y_pos[i][:,:3])
         # Only keep the edges from force_index to the root
         trunk = get_trunk(parents, force_index)
         # Find leaf of the trunk
@@ -545,9 +570,95 @@ def load_npy(data_dir, tree_num):
 
     return X_edges, X_force, X_pos, Y_pos
 
+def adjust_indexing(tuple_list, deleted_index):
+    new_tuple_list = []
+    for i, j in tuple_list:
+        if i > deleted_index:
+            i = i-1
+        if j > deleted_index:
+            j = j-1
+        new_tuple_list.append((i,j))
+    return new_tuple_list
+
+def remove_duplicate(original, duplicate, edge_def, init_positions, final_positions, duplicates, forces):
+    init_positions = np.delete(init_positions, duplicate, axis=1)
+    final_positions = np.delete(final_positions, duplicate, axis=1)
+    #print(np.shape(init_positions))
+    #print(np.shape(final_positions))
+
+    new_edge_def = []
+    new_duplicates = []
+    for orig, dup in duplicates:
+        if orig == duplicate:
+            new_duplicates.append((original,dup))
+        elif duplicate != dup and duplicate != orig:
+            new_duplicates.append((orig,dup))
+
+    for parent, child in edge_def:
+        if duplicate == parent:
+            new_edge_def.append((original,child))
+        elif duplicate != parent and duplicate != child:
+            new_edge_def.append((parent,child))
+
+    for idx, force in enumerate(forces):
+        if np.linalg.norm(force[duplicate]) != 0:
+            #print(forces[idx][original])
+            forces[idx][original] += forces[idx][duplicate]
+            #print(forces[idx][original])
+    
+    forces = np.delete(forces, duplicate, axis=1)
+
+    return new_edge_def, init_positions, final_positions, new_duplicates, forces
+
+def has_same_parent(i,j,edges):
+    for parent, child in edges:
+        if child == i:
+            parent_i = parent
+        if child == j:
+            parent_j = parent
+    return parent_i == parent_j
+
+def remove_duplicate_nodes(edges, init_positions, final_positions, X_force): # TODO: fix issue with force index -> force given per node, needs to be adjusted too.
+    #print(np.shape(X_force))
+    tree_representative = init_positions[0]
+    tree_representative = np.around(tree_representative, decimals=4)
+    #print(init_positions[0,:,:3])
+    #print(np.shape(tree_representative))
+    duplicates = [(0,1)] #treat 0 and 1 as duplicates, as 0 represents the base_link aka the floor, which should behave like the root
+    for i, node in enumerate(tree_representative):
+        for j, nodec in enumerate(tree_representative):
+            #print(np.shape(np.vstack((tree_representative[:i],tree_representative[i+1:]))))
+            if (node[:3] == nodec[:3]).all() and i != j and has_same_parent(i,j,edges):
+                if i < j:
+                    duplicates.append((i,j))
+                else:
+                    duplicates.append((j,i))
+            #print("---------------------")
+    duplicates = list(set(duplicates))
+    #print(duplicates)
+    #print(edges)
+    while len(duplicates) > 0:
+        original, duplicate = duplicates.pop()
+        edges, init_positions, final_positions, duplicates, X_force = remove_duplicate(original, duplicate, edges, init_positions, final_positions, duplicates, X_force)
+        duplicates = list(set(duplicates))
+        duplicates = adjust_indexing(duplicates, duplicate)
+        edges = adjust_indexing(edges, duplicate)
+        #print(duplicates)
+        #print(edges)
+    edges = np.array(edges)
+    #print(init_positions[0,:,:3])
+    #print(np.shape(init_positions[:,:,:3]))
+    #print(np.shape(X_force))
+    return edges, init_positions[:,:,:3], final_positions[:,:,:3], X_force
+
+
+
 def make_dataset(X_edges, X_force, X_pos, Y_pos, 
-                 make_directed=True, prune_augmented=False, rotate_augmented=False):
+                 make_directed=True, prune_augmented=False, rotate_augmented=False, just_tree_points=True):
     num_graphs = len(X_pos)
+    if just_tree_points:
+        X_edges, X_pos, Y_pos, X_force = remove_duplicate_nodes(X_edges, X_pos, Y_pos, X_force)
+
     X_edges, X_force, X_pos, Y_pos = make_directed_and_prune_augment(X_edges, X_force, X_pos, Y_pos,
                                                                      make_directed=make_directed, 
                                                                      prune_augmented=prune_augmented)
@@ -578,11 +689,38 @@ def shuffle_in_unison(a,b,c):
     np.random.shuffle(order)
     return a[order],b[order],c[order]
 
+def get_dataset_metrics(dataset):
+    avg_displacements_per_node = []
+    for tree_graph_push in dataset:
+        #print(tree_graph_push.x.numpy()[:,:3])
+        avg_displacement_per_node = np.sum(np.linalg.norm(tree_graph_push.x.numpy()[:,:3] - tree_graph_push.y.numpy()[:,:3], axis=1))/len(tree_graph_push.x)
+        avg_displacements_per_node.append(avg_displacement_per_node)
+    column_diag_dict = {}
+    #offset = 0.01
+    for displacement in avg_displacements_per_node:
+        if round(displacement, 2) in column_diag_dict.keys():
+            column_diag_dict[round(displacement, 2)] += 1
+        else:
+            column_diag_dict[round(displacement, 2)] = 1
+
+    accum_list = []
+    dict_keys = list(column_diag_dict.keys())
+    dict_keys.sort()
+    for key in dict_keys:
+        accum_list.append(column_diag_dict[key])
+
+    fig = plt.figure()
+    ax = fig.add_subplot(111)
+    ax.plot(dict_keys, accum_list)
+    display(fig)
+    clear_output(wait=True)
+
+
 ##### FUNCTION DEF END #####
 
 # Loading Datase
 
-d = DATASET_DIR # Assumes all trees in one dataset (no Iteration needed)
+d = DATASET_DIR 
 
 dataset = []
 for tree in range(0, TREE_NUM):
@@ -597,10 +735,11 @@ for tree in range(0, TREE_NUM):
     X_pos_arr = np.concatenate(X_pos_list)
     Y_pos_arr = np.concatenate(Y_pos_list)
     dataset_tree = make_dataset(X_edges, X_force_arr, X_pos_arr, Y_pos_arr, 
-                                make_directed=True, prune_augmented=False, rotate_augmented=False)
+                                make_directed=True, prune_augmented=False, rotate_augmented=False, just_tree_points=NODE_TRANSFORM)
     dataset = dataset + dataset_tree
 
-print(np.shape(dataset))
+get_dataset_metrics(dataset)
+#print(np.shape(dataset))
 # Shuffle Dataset
 #X_force_arr, X_pos_arr, Y_pos_arr = shuffle_in_unison(X_force_arr, X_pos_arr, Y_pos_arr)
 random.shuffle(dataset)
@@ -637,16 +776,16 @@ test_loader = DataLoader(val_dataset, batch_size=1, shuffle=True)
 #train_data = train_dataset[0]
 #print(train_data)
 #print()
-print('Number of Graphs in Train Dataset: ', len(train_dataset))
-print('Number of Graphs in Test Dataset: ', len(val_dataset))
-print()
+#print('Number of Graphs in Train Dataset: ', len(train_dataset))
+#print('Number of Graphs in Test Dataset: ', len(val_dataset))
+#print()
 
 # check batches
-for batch in train_loader:
-    print(batch)
-    print('Number of graphs in batch: ', batch.num_graphs) 
+#for batch in train_loader:
+    #print(batch)
+    #print('Number of graphs in batch: ', batch.num_graphs) 
 
-for i in range(10): #Investigate this function. Generates oddly shaped "trees". find out wether this loop is at fault or if the dataset is imported wrong
+for i in range(10):
     X = val_dataset[i].x[:,:3]
     #print(val_dataset[i].x[:,:3])
     Y = val_dataset[i].y[:,:3]
@@ -663,36 +802,41 @@ ax = fig.add_subplot(111)
 
 # Setup GCN
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-model = GCN().to(device)
+model = FGCN(N_GRAPH_NODES).to(device)
+#print(model)
 
 optimizer = torch.optim.Adam(model.parameters(), lr=2e-3)
 criterion = torch.nn.MSELoss()
 #criterion = torch.nn.L1Loss()
-scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min', patience=50, factor=0.5, min_lr=5e-4)
+scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min', patience=SCHED_PATIENCE, factor=0.5, min_lr=5e-4)
 
 # Train and validate model
 train_loss_history = []
 val_loss_history = []
+base_loss_history = []
 best_loss = 1e9
-for epoch in range(1, 2500):
+for epoch in range(1, N_EPOCHS):
     train_loss = train(model, optimizer, criterion, train_loader, epoch, device) #train model
-    val_loss = validate(model, criterion, val_loader, epoch, device) # validate model
+    val_loss, baseline_loss = validate(model, criterion, val_loader, epoch, device) # validate model
     if val_loss<best_loss:
         best_loss=val_loss
         best_model = copy.deepcopy(model)
     scheduler.step(best_loss)
     train_loss_history.append(train_loss)
     val_loss_history.append(val_loss)
-    #if epoch%10==0:
-    #    print(scheduler._last_lr)
+    base_loss_history.append(baseline_loss)
+    if epoch%10==0:
+        print(scheduler._last_lr)
     
     ax.clear()
     ax.plot(train_loss_history, 'r', label='train')
     ax.plot(val_loss_history, 'b', label='validation')
+    ax.plot(base_loss_history, 'g', label='baseline loss')
     ax.legend(loc="upper right")
-    #ax.set_ylim([0, 0.2])
+    ax.set_ylim([0, 0.2])
     display(fig)
     clear_output(wait=True)
+    print("epoch %s"%epoch)
 
 #device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 #best_model = GCN().to(device)
