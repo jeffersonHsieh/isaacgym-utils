@@ -61,7 +61,7 @@ class FGCNResidualBlock(torch.nn.Module):
 
 class FGCN(torch.nn.Module): # TODO: flexible in and out layer size depending on if we do branches or points as nodes: (10,7) to (6,3)
     def __init__(self, n_graph_nodes):
-        print("number of graph nodes: %s"n_graph_nodes)
+        print("number of graph nodes: %s"%n_graph_nodes)
         super().__init__()
         hidden_size = 1280 
         p = 0.4
