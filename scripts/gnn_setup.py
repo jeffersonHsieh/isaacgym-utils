@@ -17,6 +17,7 @@ from matplotlib.lines import Line2D
 from mpl_toolkits.mplot3d import Axes3D
 from matplotlib.patches import FancyArrowPatch
 from mpl_toolkits.mplot3d import proj3d
+import wandb
 import argparse
 
 DATASET_DIR = "/mnt/hdd/jan-malte/8Nodes_by_tree/"
@@ -223,11 +224,12 @@ def test(model, test_loader, device):
                             batch.x[:,:3], 
                             batch.edge_index, batch.force_node[0], 
                             batch.x[:,-3:])
+            plt.savefig(results_path+"prediction_example%s"%idx)
         idx += 1
     l2_norm = running_l2_norm/num_graphs
     print('Average node distance error: {}'.format(l2_norm))
 
-def visualize_graph(X, Y, X_0, edge_index, force_node, force): #TODO: check this function. The labelling might be off?
+def visualize_graph(Y, X_0, edge_index, force_node, force, X=None): #TODO: check this function. The labelling might be off?
     force = force.detach().cpu().numpy()
     
     force_vector = force[force_node]/np.linalg.norm(force[force_node])/2
@@ -240,10 +242,12 @@ def visualize_graph(X, Y, X_0, edge_index, force_node, force): #TODO: check this
     y_edges = []
     for edge in edge_index.T:
         x_0.append([X_0[edge[0]].detach().cpu().numpy(), X_0[edge[1]].detach().cpu().numpy()])
-        x_edges.append([X[edge[0]].detach().cpu().numpy(), X[edge[1]].detach().cpu().numpy()])
+        if X is not None:
+            x_edges.append([X[edge[0]].detach().cpu().numpy(), X[edge[1]].detach().cpu().numpy()])
         y_edges.append([Y[edge[0]].detach().cpu().numpy(), Y[edge[1]].detach().cpu().numpy()])
     x_0 = np.array(x_0)
-    x_edges = np.array(x_edges)
+    if X is not None:
+        x_edges = np.array(x_edges)
     y_edges = np.array(y_edges)
 
     
@@ -251,11 +255,13 @@ def visualize_graph(X, Y, X_0, edge_index, force_node, force): #TODO: check this
     fn = X_0[force_node].detach().cpu().numpy()
     ax.scatter(fn[0], fn[1], fn[2], c='m', s=50)
     x0_lc = Line3DCollection(x_0, colors=[0,0,1,1], linewidths=1)
-    x_lc = Line3DCollection(x_edges, colors=[1,0,0,1], linewidths=5)
+    if X is not None:
+        x_lc = Line3DCollection(x_edges, colors=[1,0,0,1], linewidths=5)
     y_lc = Line3DCollection(y_edges, colors=[0,1,0,1], linewidths=5)
     ax.add_collection3d(x0_lc)
-    ax.add_collection3d(x_lc)
     ax.add_collection3d(y_lc)
+    if X is not None:
+        ax.add_collection3d(x_lc)
     
     arrow_prop_dict = dict(mutation_scale=30, arrowstyle='-|>', color='m', shrinkA=0, shrinkB=0)
     a = Arrow3D([force_A[0], force_B[0]], 
@@ -270,11 +276,17 @@ def visualize_graph(X, Y, X_0, edge_index, force_node, force): #TODO: check this
     ax.set_ylim([-0.5, 0.5])
     ax.set_zlim([0, 3])
     
-    custom_lines = [Line2D([0], [0], color=[0,0,1,1], lw=2),
-                    Line2D([0], [0], color=[1,0,0,1], lw=4),
-                    Line2D([0], [0], color=[0,1,0,1], lw=4)]
+    if X is not None
+        custom_lines = [Line2D([0], [0], color=[0,0,1,1], lw=2),
+                        Line2D([0], [0], color=[1,0,0,1], lw=4),
+                        Line2D([0], [0], color=[0,1,0,1], lw=4)]
 
-    ax.legend(custom_lines, ['Input', 'GT', 'Predicted'])
+        ax.legend(custom_lines, ['Input', 'GT', 'Predicted'])
+    else:
+        custom_lines = [Line2D([0], [0], color=[0,0,1,1], lw=2),
+                        Line2D([0], [0], color=[1,0,0,1], lw=4)]
+
+        ax.legend(custom_lines, ['Input', 'GT'])
     
     
     ax = set_axes_equal(ax)
@@ -714,20 +726,39 @@ def get_dataset_metrics(dataset):
     ax = fig.add_subplot(111)
     ax.plot(dict_keys, accum_list)
     display(fig)
+    plt.savefig(results_path+"dataset_analysis")
     clear_output(wait=True)
 
 
 ##### FUNCTION DEF END #####
 
 parser = argparse.ArgumentParser()
-parser.add_argument("-dir", type=str, dest="file_directory")
-parser.add_argument("-gn", type=int, default=8, dest="graph_nodes") #number of graph nodes
-parser.add_argument("-ep", type=int, default=500, dest="n_epochs") # number of epochs
-parser.add_argument("-pat", type=int, default=50, dest="sched_patience") #patience of scheduler
-parser.add_argument("-nt", type=bool, default=True, dest="node_transform") # if node transform should be performed
+parser.add_argument("-dir", type=str, dest="file_directory", help="directory in which the dataset files are located")
+parser.add_argument("-id", type=str, dest="id", help="id to identify the results folder")
+parser.add_argument("-gn", type=int, default=8, dest="graph_nodes", help="number of layers the GCN will have") #number of graph nodes
+parser.add_argument("-ep", type=int, default=500, dest="n_epochs", help="number of epochs to run") # number of epochs
+parser.add_argument("-pat", type=int, default=50, dest="sched_patience", help="patience of the scheduler") #patience of scheduler
+parser.add_argument("-nt", type=bool, default=True, dest="node_transform", help="wether or not we transform the graph to tree node representation") # if node transform should be performed
+parser.add_argument("-btchs", type=int, default=256, dest="batch_size", help="batch size")
+parser.add_argument("-ilr", type=float, default=2e-3, dest="learn_rate", help="initial learning rate")
 
 args = parser.parse_args()
+
+results_path = "../../results%s"%args.id
+mkdir(results_path)
+results_path = results_path+"/"
+
 # Loading Datase
+
+wandb.init(project="gcn-tree-deformation")
+wandb.config = {
+  "GCN Layers": args.graph_nodes,
+  "Epochs": args.n_epochs,
+  "Treepoint Nodes": args.node_transform,
+  "Scheduler Patience": args.sched_patience,
+  "Batch Size": args.batch_size,
+  "Initial learning rate": args.learn_rate
+}
 
 d = args.file_directory 
 
@@ -776,7 +807,7 @@ val_dataset = dataset[train_val_split:]
 #print(val_dataset[0])
 #print(val_dataset[0].edge_index)
 
-batch_size=256
+batch_size=args.batch_size
 train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
 val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
 test_loader = DataLoader(val_dataset, batch_size=1, shuffle=True)
@@ -804,7 +835,8 @@ for i in range(10):
     edge_index = val_dataset[i].edge_index
     #print(edge_index)
     force = val_dataset[i].x[:,-3:]
-    visualize_graph(X, Y, X, edge_index, force_node, force)
+    visualize_graph(Y, X, edge_index, force_node, force)
+    plt.savefig(results_path + "example_push%s"%i)
 
 fig = plt.figure()
 ax = fig.add_subplot(111)
@@ -814,7 +846,7 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 model = FGCN(args.graph_nodes).to(device)
 #print(model)
 
-optimizer = torch.optim.Adam(model.parameters(), lr=2e-3)
+optimizer = torch.optim.Adam(model.parameters(), lr=args.learn_rate)
 criterion = torch.nn.MSELoss()
 #criterion = torch.nn.L1Loss()
 scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min', patience=args.sched_patience, factor=0.5, min_lr=5e-4)
@@ -837,6 +869,9 @@ for epoch in range(1, args.n_epochs):
     if epoch%10==0:
         print(scheduler._last_lr)
     
+    # log with wandb
+    wandb.log({"training loss": train_loss, "validation loss": val_loss, "baseline_loss": baseline_loss, "epoch": epoch, "learning rate": scheduler._last_lr})
+
     ax.clear()
     ax.plot(train_loss_history, 'r', label='train')
     ax.plot(val_loss_history, 'b', label='validation')
@@ -855,4 +890,4 @@ for epoch in range(1, args.n_epochs):
 best_model.eval()
 test(best_model, test_loader, device)
 
-torch.save(best_model.state_dict(), 'model_157_quat.pt')
+torch.save(best_model.state_dict(), results_path+'model.pt')
