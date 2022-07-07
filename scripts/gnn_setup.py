@@ -61,6 +61,7 @@ class FGCNResidualBlock(torch.nn.Module):
 
 class FGCN(torch.nn.Module): # TODO: flexible in and out layer size depending on if we do branches or points as nodes: (10,7) to (6,3)
     def __init__(self, n_graph_nodes):
+        print("number of graph nodes: %s"n_graph_nodes)
         super().__init__()
         hidden_size = 1280 
         p = 0.4
@@ -744,12 +745,13 @@ parser.add_argument("-ilr", type=float, default=2e-3, dest="learn_rate", help="i
 
 args = parser.parse_args()
 
+print("[%s] setting up result path"%datetime.datetime.now())
 results_path = "../../results%s"%args.id
 mkdir(results_path)
 results_path = results_path+"/"
+print("[%s] done"%datetime.datetime.now())
 
-# Loading Datase
-
+print("[%s] setting up wandb"%datetime.datetime.now())
 wandb.init(project="gcn-tree-deformation")
 wandb.config = {
   "GCN Layers": args.graph_nodes,
@@ -759,7 +761,10 @@ wandb.config = {
   "Batch Size": args.batch_size,
   "Initial learning rate": args.learn_rate
 }
+print("[%s] done"%datetime.datetime.now())
 
+# Loading Datase
+print("[%s] loading data"%datetime.datetime.now())
 d = args.file_directory 
 
 dataset = []
@@ -777,11 +782,16 @@ for tree in range(0, TREE_NUM):
     dataset_tree = make_dataset(X_edges, X_force_arr, X_pos_arr, Y_pos_arr, 
                                 make_directed=True, prune_augmented=False, rotate_augmented=False, just_tree_points=args.node_transform)
     dataset = dataset + dataset_tree
+print("[%s] done"%datetime.datetime.now())
 
+print("[%s] generating dataset metrics"%datetime.datetime.now())
 get_dataset_metrics(dataset)
 #print(np.shape(dataset))
 # Shuffle Dataset
 #X_force_arr, X_pos_arr, Y_pos_arr = shuffle_in_unison(X_force_arr, X_pos_arr, Y_pos_arr)
+print("[%s] done"%datetime.datetime.now())
+
+print("[%s] preparing dataset"%datetime.datetime.now())
 random.shuffle(dataset)
 
 # setup validation/test split
@@ -812,6 +822,7 @@ train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
 val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
 test_loader = DataLoader(val_dataset, batch_size=1, shuffle=True)
 
+print("[%s] done"%datetime.datetime.now())
 #check train dataset?
 #train_data = train_dataset[0]
 #print(train_data)
@@ -825,6 +836,7 @@ test_loader = DataLoader(val_dataset, batch_size=1, shuffle=True)
     #print(batch)
     #print('Number of graphs in batch: ', batch.num_graphs) 
 
+print("[%s] printing example trees"%datetime.datetime.now())
 for i in range(10):
     X = val_dataset[i].x[:,:3]
     #print(val_dataset[i].x[:,:3])
@@ -840,8 +852,10 @@ for i in range(10):
 
 fig = plt.figure()
 ax = fig.add_subplot(111)
+print("[%s] done"%datetime.datetime.now())
 
 # Setup GCN
+print("[%s] setting up GCN"%datetime.datetime.now())
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 model = FGCN(args.graph_nodes).to(device)
 #print(model)
@@ -850,7 +864,9 @@ optimizer = torch.optim.Adam(model.parameters(), lr=args.learn_rate)
 criterion = torch.nn.MSELoss()
 #criterion = torch.nn.L1Loss()
 scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min', patience=args.sched_patience, factor=0.5, min_lr=5e-4)
+print("[%s] done"%datetime.datetime.now())
 
+print("[%s] Training"%datetime.datetime.now())
 # Train and validate model
 train_loss_history = []
 val_loss_history = []
@@ -880,8 +896,9 @@ for epoch in range(1, args.n_epochs):
     ax.set_ylim([0, 0.2])
     display(fig)
     clear_output(wait=True)
-    print("epoch %s"%epoch)
+    print("[%s] epoch %s"%(datetime.datetime.now(), epoch))
 
+print("[%s] done"%datetime.datetime.now())
 #device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 #best_model = GCN().to(device)
 #best_model.load_state_dict(torch.load('model_173_seed0.pt'))
