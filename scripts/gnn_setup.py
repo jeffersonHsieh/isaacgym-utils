@@ -515,12 +515,17 @@ def make_directed_and_prune_augment(X_edges, X_force, X_pos, Y_pos, make_directe
                 new_X_force.append(X_force[i][reindex_mapping])
                 new_X_pos.append(X_pos[i][reindex_mapping])
                 new_Y_pos.append(Y_pos[i][reindex_mapping])
+    print(np.shape(new_X_edges))
     return new_X_edges, new_X_force, new_X_pos, new_Y_pos
 
 def add_shortcuts(X_edges):
     explored = []
     for parent, child in X_edges:
         if parent not in explored:
+            for descendant in get_descendants(X_edges):
+                if [parent, descendant] not in X_edges:
+                    X_edges.append([parent, descendant])
+            explored.append(parent)
 
 
 def rotate_augment(X_edges, X_force, X_pos, Y_pos, rotate_augment_factor=5, stddev_x_angle=0.2, stddev_y_angle=0.2):
@@ -897,7 +902,7 @@ print("[%s] done"%datetime.datetime.now())
 
 # Setup GCN
 print("[%s] setting up GCN"%datetime.datetime.now())
-device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+device = torch.device('cuda:2' if torch.cuda.is_available() else 'cpu')
 if not torch.cuda.is_available():
     print("running on CPU")
 
