@@ -134,3 +134,6 @@ dmypy.json
 
 outs/
 .vscode/
+
+# wandb
+scripts/wandb

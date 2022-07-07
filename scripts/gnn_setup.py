@@ -19,6 +19,7 @@ from matplotlib.patches import FancyArrowPatch
 from mpl_toolkits.mplot3d import proj3d
 import wandb
 import argparse
+import datetime
 
 DATASET_DIR = "/mnt/hdd/jan-malte/8Nodes_by_tree/"
 TREE_NUM = 36
@@ -61,7 +62,7 @@ class FGCNResidualBlock(torch.nn.Module):
 
 class FGCN(torch.nn.Module): # TODO: flexible in and out layer size depending on if we do branches or points as nodes: (10,7) to (6,3)
     def __init__(self, n_graph_nodes):
-        print("number of graph nodes: %s"n_graph_nodes)
+        print("number of graph nodes: %s"%n_graph_nodes)
         super().__init__()
         hidden_size = 1280 
         p = 0.4
@@ -277,7 +278,7 @@ def visualize_graph(Y, X_0, edge_index, force_node, force, X=None): #TODO: check
     ax.set_ylim([-0.5, 0.5])
     ax.set_zlim([0, 3])
     
-    if X is not None
+    if X is not None:
         custom_lines = [Line2D([0], [0], color=[0,0,1,1], lw=2),
                         Line2D([0], [0], color=[1,0,0,1], lw=4),
                         Line2D([0], [0], color=[0,1,0,1], lw=4)]
@@ -747,7 +748,7 @@ args = parser.parse_args()
 
 print("[%s] setting up result path"%datetime.datetime.now())
 results_path = "../../results%s"%args.id
-mkdir(results_path)
+os.mkdir(results_path)
 results_path = results_path+"/"
 print("[%s] done"%datetime.datetime.now())
 
