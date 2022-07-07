@@ -21,11 +21,11 @@ import wandb
 import argparse
 import datetime
 
-DATASET_DIR = "/mnt/hdd/jan-malte/8Nodes_by_tree/"
+DATASET_DIR = "/mnt/hdd/jan-malte/NEW_DATASET/8Nodes_by_tree/"
 TREE_NUM = 36
 N_GRAPH_NODES = 8
 N_EPOCHS = 10
-NODE_TRANSFORM = False
+NODE_TRANSFORM = True
 SCHED_PATIENCE = 10
 TIP_THICKNESS = 0.01
 
@@ -259,8 +259,8 @@ def visualize_graph(Y, X_0, edge_index, force_node, force, X=None): #TODO: check
     x0_lc = Line3DCollection(x_0, colors=[0,0,1,1], linewidths=1)
     if X is not None:
         x_lc = Line3DCollection(x_edges, colors=[1,0,0,1], linewidths=5)
+        ax.add_collection3d(x0_lc)
     y_lc = Line3DCollection(y_edges, colors=[0,1,0,1], linewidths=5)
-    ax.add_collection3d(x0_lc)
     ax.add_collection3d(y_lc)
     if X is not None:
         ax.add_collection3d(x_lc)
@@ -516,6 +516,12 @@ def make_directed_and_prune_augment(X_edges, X_force, X_pos, Y_pos, make_directe
                 new_X_pos.append(X_pos[i][reindex_mapping])
                 new_Y_pos.append(Y_pos[i][reindex_mapping])
     return new_X_edges, new_X_force, new_X_pos, new_Y_pos
+
+def add_shortcuts(X_edges):
+    explored = []
+    for parent, child in X_edges:
+        if parent not in explored:
+
 
 def rotate_augment(X_edges, X_force, X_pos, Y_pos, rotate_augment_factor=5, stddev_x_angle=0.2, stddev_y_angle=0.2):
     """
@@ -892,6 +898,8 @@ print("[%s] done"%datetime.datetime.now())
 # Setup GCN
 print("[%s] setting up GCN"%datetime.datetime.now())
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+if not torch.cuda.is_available():
+    print("running on CPU")
 
 if args.node_transform:
     in_size = 7
