@@ -27,6 +27,8 @@ N_GRAPH_NODES = 8
 N_EPOCHS = 10
 NODE_TRANSFORM = False
 SCHED_PATIENCE = 10
+TIP_THICKNESS = 0.01
+
 
 seed = 0
 np.random.seed(seed)
@@ -60,23 +62,22 @@ class FGCNResidualBlock(torch.nn.Module):
         x = self.do(x)
         return x
 
-class FGCN(torch.nn.Module): # TODO: flexible in and out layer size depending on if we do branches or points as nodes: (10,7) to (6,3)
-    def __init__(self, n_graph_nodes):
-        print("number of graph nodes: %s"%n_graph_nodes)
+class FGCN(torch.nn.Module): 
+    def __init__(self, n_graph_nodes, in_size, out_size):
+        #print("number of graph nodes: %s"%n_graph_nodes)
         super().__init__()
         hidden_size = 1280 
         p = 0.4
         self.stem = torch.nn.Sequential(
-            torch.nn.Linear(10, hidden_size), 
+            torch.nn.Linear(in_size, hidden_size),  
             torch.nn.ReLU(),
-        )
+        ) 
 
         self.blocks = torch.nn.ModuleList([FGCNResidualBlock(hidden_size,p) for _ in range(0,n_graph_nodes)])
 
         self.out = torch.nn.Sequential(
-            torch.nn.Linear(hidden_size, 7)
-        )
-
+            torch.nn.Linear(hidden_size, out_size)
+        ) 
         
 
     def forward(self, data):
@@ -90,12 +91,11 @@ class FGCN(torch.nn.Module): # TODO: flexible in and out layer size depending on
         x = self.out(x)        
         return x
 
-# Residual connection
-# Needs to be adjusted to allow for larger number (>5) of Tree Nodes 
+# Residual connection 
 class GCN(torch.nn.Module):
     def __init__(self):
         super().__init__()
-        hidden_size = 1280 #might need to be adjusted?
+        hidden_size = 1280 
         p = 0.4
         self.stem = torch.nn.Sequential(
             torch.nn.Linear(10, hidden_size),
@@ -123,7 +123,7 @@ class GCN(torch.nn.Module):
         self.do5 = torch.nn.Dropout(p)
 
         self.out = torch.nn.Sequential(
-            torch.nn.Linear(hidden_size, 7)
+            torch.nn.Linear(hidden_size, 7) 
         )
 
     def forward(self, data):
@@ -666,13 +666,47 @@ def remove_duplicate_nodes(edges, init_positions, final_positions, X_force): # T
     #print(np.shape(X_force))
     return edges, init_positions[:,:,:3], final_positions[:,:,:3], X_force
 
+def find_children(edges, node):
+    children = []
+    for parent, child in edges:
+        if parent == node:
+            children.append(child)
+    return children
 
+def assign_thickness(edges, thickness_list, node):
+    child_idxs = find_children(edges, node)
+    print(child_idxs)
+    print(len(thickness_list))
+    if len(child_idxs) == 0:
+        thickness_list[node] = TIP_THICKNESS
+    else:
+        radius = 0
+        for child_idx in child_idxs:
+            if thickness_list[child_idx] == 0:
+                thickness_list = assign_thickness(edges, thickness_list, child_idx)
+            radius += thickness_list[child_idx]**3
+        radius = radius**(1/3)
+        thickness_list[node] = radius
+    return thickness_list
+
+def add_thickness(X_edges, X_pos):
+    print(np.shape(X_pos))
+    thickness_list = [0]*np.shape(X_pos)[1]
+    thickness_list = assign_thickness(X_edges, thickness_list, 0)
+    print(thickness_list)
+    thickness_arr = np.tile(np.array(thickness_list), (np.shape(X_pos)[0],1))
+    thickness_arr = np.reshape(thickness_arr, (np.shape(X_pos)[0], np.shape(X_pos)[1], 1))
+    print(np.shape(thickness_arr))
+    X_edges = np.append(X_pos, thickness_arr, axis=2)
+    print(np.shape(X_edges))
+    return X_edges
 
 def make_dataset(X_edges, X_force, X_pos, Y_pos, 
-                 make_directed=True, prune_augmented=False, rotate_augmented=False, just_tree_points=True):
+                 make_directed=True, prune_augmented=False, rotate_augmented=False, just_tree_points=True): # CALLED PER TREE
     num_graphs = len(X_pos)
     if just_tree_points:
         X_edges, X_pos, Y_pos, X_force = remove_duplicate_nodes(X_edges, X_pos, Y_pos, X_force)
+        X_pos = add_thickness(X_edges, X_pos) #adds branch thickness as a fourth value to the 3 dimensional position argument for each node
 
     X_edges, X_force, X_pos, Y_pos = make_directed_and_prune_augment(X_edges, X_force, X_pos, Y_pos,
                                                                      make_directed=make_directed, 
@@ -858,7 +892,15 @@ print("[%s] done"%datetime.datetime.now())
 # Setup GCN
 print("[%s] setting up GCN"%datetime.datetime.now())
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-model = FGCN(args.graph_nodes).to(device)
+
+if args.node_transform:
+    in_size = 7
+    out_size = 3
+else:
+    in_size = 7
+    out_size = 6
+
+model = FGCN(args.graph_nodes, in_size, out_size).to(device)
 #print(model)
 
 optimizer = torch.optim.Adam(model.parameters(), lr=args.learn_rate)
