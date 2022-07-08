@@ -191,6 +191,7 @@ def validate(model, criterion, val_loader, epoch, device):
     running_l2_norm_base = 0
     num_graphs = 0
     for batch in val_loader:
+        print(np.shape(batch.y)) #Flattened to two dimensions: torch.Size([2304, 3]) => (nodes x trees, position)
         batch.to(device)
         out = model(batch)
         #print("####################")
@@ -225,13 +226,12 @@ def test(model, test_loader, device):
                             batch.y[:,:3], 
                             batch.x[:,:3], 
                             batch.edge_index, batch.force_node[0], 
-                            batch.x[:,-3:])
-            plt.savefig(results_path+"prediction_example%s"%idx)
+                            batch.x[:,-3:], results_path+"prediction_example%s"%idx)
         idx += 1
     l2_norm = running_l2_norm/num_graphs
     print('Average node distance error: {}'.format(l2_norm))
 
-def visualize_graph(Y, X_0, edge_index, force_node, force, X=None): #TODO: check this function. The labelling might be off?
+def visualize_graph(X, Y, X_0, edge_index, force_node, force, name):
     force = force.detach().cpu().numpy()
     
     force_vector = force[force_node]/np.linalg.norm(force[force_node])/2
@@ -244,12 +244,10 @@ def visualize_graph(Y, X_0, edge_index, force_node, force, X=None): #TODO: check
     y_edges = []
     for edge in edge_index.T:
         x_0.append([X_0[edge[0]].detach().cpu().numpy(), X_0[edge[1]].detach().cpu().numpy()])
-        if X is not None:
-            x_edges.append([X[edge[0]].detach().cpu().numpy(), X[edge[1]].detach().cpu().numpy()])
+        x_edges.append([X[edge[0]].detach().cpu().numpy(), X[edge[1]].detach().cpu().numpy()])
         y_edges.append([Y[edge[0]].detach().cpu().numpy(), Y[edge[1]].detach().cpu().numpy()])
     x_0 = np.array(x_0)
-    if X is not None:
-        x_edges = np.array(x_edges)
+    x_edges = np.array(x_edges)
     y_edges = np.array(y_edges)
 
     
@@ -257,20 +255,17 @@ def visualize_graph(Y, X_0, edge_index, force_node, force, X=None): #TODO: check
     fn = X_0[force_node].detach().cpu().numpy()
     ax.scatter(fn[0], fn[1], fn[2], c='m', s=50)
     x0_lc = Line3DCollection(x_0, colors=[0,0,1,1], linewidths=1)
-    if X is not None:
-        x_lc = Line3DCollection(x_edges, colors=[1,0,0,1], linewidths=5)
-        ax.add_collection3d(x0_lc)
+    x_lc = Line3DCollection(x_edges, colors=[1,0,0,1], linewidths=5)
     y_lc = Line3DCollection(y_edges, colors=[0,1,0,1], linewidths=5)
+    ax.add_collection3d(x0_lc)
+    ax.add_collection3d(x_lc)
     ax.add_collection3d(y_lc)
-    if X is not None:
-        ax.add_collection3d(x_lc)
     
     arrow_prop_dict = dict(mutation_scale=30, arrowstyle='-|>', color='m', shrinkA=0, shrinkB=0)
     a = Arrow3D([force_A[0], force_B[0]], 
                 [force_A[1], force_B[1]], 
                 [force_A[2], force_B[2]], **arrow_prop_dict)
     ax.add_artist(a)
-    
     ax.set_xlabel('X')
     ax.set_ylabel('Y')
     ax.set_zlabel('Z')
@@ -278,21 +273,82 @@ def visualize_graph(Y, X_0, edge_index, force_node, force, X=None): #TODO: check
     ax.set_ylim([-0.5, 0.5])
     ax.set_zlim([0, 3])
     
-    if X is not None:
-        custom_lines = [Line2D([0], [0], color=[0,0,1,1], lw=2),
-                        Line2D([0], [0], color=[1,0,0,1], lw=4),
-                        Line2D([0], [0], color=[0,1,0,1], lw=4)]
+    custom_lines = [Line2D([0], [0], color=[0,0,1,1], lw=2),
+                    Line2D([0], [0], color=[1,0,0,1], lw=4),
+                    Line2D([0], [0], color=[0,1,0,1], lw=4)]
 
-        ax.legend(custom_lines, ['Input', 'GT', 'Predicted'])
-    else:
-        custom_lines = [Line2D([0], [0], color=[0,0,1,1], lw=2),
-                        Line2D([0], [0], color=[1,0,0,1], lw=4)]
-
-        ax.legend(custom_lines, ['Input', 'GT'])
+    ax.legend(custom_lines, ['Input', 'GT', 'Predicted'])
     
     
     ax = set_axes_equal(ax)
-    plt.show()
+    plt.tight_layout()
+    plt.savefig(name)
+    plt.show() 
+
+def make_gif(X, Y, X_0, edge_index, force_node, force, id):
+    force = force.detach().cpu().numpy()
+    
+    force_vector = force[force_node]/np.linalg.norm(force[force_node])/2
+    force_A = X_0.detach().cpu().numpy()[force_node]
+    force_B = X_0.detach().cpu().numpy()[force_node] + force_vector*2
+    
+    
+    x_0 = []
+    x_edges = []
+    y_edges = []
+    for edge in edge_index.T:
+        x_0.append([X_0[edge[0]].detach().cpu().numpy(), X_0[edge[1]].detach().cpu().numpy()])
+        x_edges.append([X[edge[0]].detach().cpu().numpy(), X[edge[1]].detach().cpu().numpy()])
+        y_edges.append([Y[edge[0]].detach().cpu().numpy(), Y[edge[1]].detach().cpu().numpy()])
+    x_0 = np.array(x_0)
+    x_edges = np.array(x_edges)
+    y_edges = np.array(y_edges)
+
+
+    fig = plt.figure()
+    ax = Axes3D(fig)
+    #ax = plt.figure().add_subplot(projection='3d')
+    fn = X_0[force_node].detach().cpu().numpy()
+    ax.scatter(fn[0], fn[1], fn[2], c='m', s=50)
+    x0_lc = Line3DCollection(x_0, colors=[0,0,1,1], linewidths=1)
+    x_lc = Line3DCollection(x_edges, colors=[1,0,0,1], linewidths=5)
+    y_lc = Line3DCollection(y_edges, colors=[0,1,0,1], linewidths=5)
+    ax.add_collection3d(x0_lc)
+    ax.add_collection3d(x_lc)
+    ax.add_collection3d(y_lc)
+    
+    arrow_prop_dict = dict(mutation_scale=30, arrowstyle='-|>', color='m', shrinkA=0, shrinkB=0)
+    a = Arrow3D([force_A[0], force_B[0]], 
+                [force_A[1], force_B[1]], 
+                [force_A[2], force_B[2]], **arrow_prop_dict)
+    ax.add_artist(a)
+    ax.set_xlabel('X')
+    ax.set_ylabel('Y')
+    ax.set_zlabel('Z')
+    ax.set_xlim([-0.5, 0.5])
+    ax.set_ylim([-0.5, 0.5])
+    ax.set_zlim([0, 3])
+    
+    #custom_lines = [Line2D([0], [0], color=[0,0,1,1], lw=2),
+    #                Line2D([0], [0], color=[1,0,0,1], lw=4),
+    #                Line2D([0], [0], color=[0,1,0,1], lw=4)]
+
+    #ax.legend(custom_lines, ['Input', 'GT', 'Predicted'])
+    
+    
+    ax = set_axes_equal(ax)
+
+    def init():
+        return fig,
+
+    def animate(i):
+        ax.view_init(elev=10., azim=i)
+        return fig,
+
+    # Animate
+    anim = animation.FuncAnimation(fig, animate, init_func=init,
+                                frames=360, interval=20, blit=True)
+    anim.save('output/{}.gif'.format(id))
 
 def set_axes_equal(ax):
     '''Make axes of 3D plot have equal scale so that spheres appear as spheres,
@@ -515,17 +571,30 @@ def make_directed_and_prune_augment(X_edges, X_force, X_pos, Y_pos, make_directe
                 new_X_force.append(X_force[i][reindex_mapping])
                 new_X_pos.append(X_pos[i][reindex_mapping])
                 new_Y_pos.append(Y_pos[i][reindex_mapping])
-    print(np.shape(new_X_edges))
     return new_X_edges, new_X_force, new_X_pos, new_Y_pos
 
-def add_shortcuts(X_edges):
+def get_indirect_descendants(X_edges, node): #assumes non loopy graphs
+    frontier = [node]
+    descendants = []
+    while len(frontier) > 0:
+        explore_node = frontier.pop()
+        for parent, child in X_edges:
+            if parent == explore_node:
+                if parent != node:
+                    descendants.append(child)
+                frontier.append(child)
+    return descendants
+
+def add_shortcuts(X_edges, original_edges):
     explored = []
-    for parent, child in X_edges:
+    for parent, child in original_edges:
         if parent not in explored:
-            for descendant in get_descendants(X_edges):
-                if [parent, descendant] not in X_edges:
-                    X_edges.append([parent, descendant])
+            for descendant in get_indirect_descendants(original_edges, parent):
+                X_edges = np.append(X_edges, [[parent, descendant]], axis=0)
             explored.append(parent)
+    print(original_edges)
+    print(X_edges)
+    return X_edges
 
 
 def rotate_augment(X_edges, X_force, X_pos, Y_pos, rotate_augment_factor=5, stddev_x_angle=0.2, stddev_y_angle=0.2):
@@ -686,8 +755,6 @@ def find_children(edges, node):
 
 def assign_thickness(edges, thickness_list, node):
     child_idxs = find_children(edges, node)
-    print(child_idxs)
-    print(len(thickness_list))
     if len(child_idxs) == 0:
         thickness_list[node] = TIP_THICKNESS
     else:
@@ -701,27 +768,25 @@ def assign_thickness(edges, thickness_list, node):
     return thickness_list
 
 def add_thickness(X_edges, X_pos):
-    print(np.shape(X_pos))
     thickness_list = [0]*np.shape(X_pos)[1]
     thickness_list = assign_thickness(X_edges, thickness_list, 0)
-    print(thickness_list)
     thickness_arr = np.tile(np.array(thickness_list), (np.shape(X_pos)[0],1))
     thickness_arr = np.reshape(thickness_arr, (np.shape(X_pos)[0], np.shape(X_pos)[1], 1))
-    print(np.shape(thickness_arr))
     X_edges = np.append(X_pos, thickness_arr, axis=2)
-    print(np.shape(X_edges))
     return X_edges
 
 def make_dataset(X_edges, X_force, X_pos, Y_pos, 
-                 make_directed=True, prune_augmented=False, rotate_augmented=False, just_tree_points=True): # CALLED PER TREE
+                 make_directed=True, prune_augmented=False, rotate_augmented=False, just_tree_points=True, add_thickness_bool=True, add_shortcuts_bool=True): # CALLED PER TREE
     num_graphs = len(X_pos)
     if just_tree_points:
         X_edges, X_pos, Y_pos, X_force = remove_duplicate_nodes(X_edges, X_pos, Y_pos, X_force)
-        X_pos = add_thickness(X_edges, X_pos) #adds branch thickness as a fourth value to the 3 dimensional position argument for each node
+        if add_thickness_bool:
+            X_pos = add_thickness(X_edges, X_pos) #adds branch thickness as a fourth value to the 3 dimensional position argument for each node
 
     X_edges, X_force, X_pos, Y_pos = make_directed_and_prune_augment(X_edges, X_force, X_pos, Y_pos,
                                                                      make_directed=make_directed, 
                                                                      prune_augmented=prune_augmented)
+
     if rotate_augmented:
         X_edges, X_force, X_pos, Y_pos = rotate_augment(X_edges, X_force, X_pos, Y_pos)
 
@@ -788,6 +853,8 @@ parser.add_argument("-pat", type=int, default=50, dest="sched_patience", help="p
 parser.add_argument("-nt", type=bool, default=True, dest="node_transform", help="wether or not we transform the graph to tree node representation") # if node transform should be performed
 parser.add_argument("-btchs", type=int, default=256, dest="batch_size", help="batch size")
 parser.add_argument("-ilr", type=float, default=2e-3, dest="learn_rate", help="initial learning rate")
+parser.add_argument("-ath", type=bool, default=True, dest="add_thickness", help="wether or not to add branch thickness")
+parser.add_argument("-ash", type=bool, default=False, dest="add_shortcuts", help="wether or not generate shortcuts")
 
 args = parser.parse_args()
 
@@ -826,7 +893,7 @@ for tree in range(0, TREE_NUM):
     X_pos_arr = np.concatenate(X_pos_list)
     Y_pos_arr = np.concatenate(Y_pos_list)
     dataset_tree = make_dataset(X_edges, X_force_arr, X_pos_arr, Y_pos_arr, 
-                                make_directed=True, prune_augmented=False, rotate_augmented=False, just_tree_points=args.node_transform)
+                                make_directed=True, prune_augmented=False, rotate_augmented=False, just_tree_points=args.node_transform, add_thickness_bool=args.add_thickness, add_shortcuts_bool=args.add_shortcuts)
     dataset = dataset + dataset_tree
 print("[%s] done"%datetime.datetime.now())
 
@@ -890,11 +957,10 @@ for i in range(10):
     #print(val_dataset[i].y[:,:3])
     force_node = val_dataset[i].force_node
     #print(force_node)
-    edge_index = val_dataset[i].edge_index
+    print_edges = val_dataset[i].edge_index
     #print(edge_index)
     force = val_dataset[i].x[:,-3:]
-    visualize_graph(Y, X, edge_index, force_node, force)
-    plt.savefig(results_path + "example_push%s"%i)
+    visualize_graph(X, Y, X, print_edges, force_node, force, results_path+"example_push%s"%i)
 
 fig = plt.figure()
 ax = fig.add_subplot(111)
@@ -902,7 +968,7 @@ print("[%s] done"%datetime.datetime.now())
 
 # Setup GCN
 print("[%s] setting up GCN"%datetime.datetime.now())
-device = torch.device('cuda:2' if torch.cuda.is_available() else 'cpu')
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 if not torch.cuda.is_available():
     print("running on CPU")
 
@@ -959,8 +1025,8 @@ print("[%s] done"%datetime.datetime.now())
 #best_model = GCN().to(device)
 #best_model.load_state_dict(torch.load('model_173_seed0.pt'))
 
+torch.save(best_model.state_dict(), results_path+'model.pt')
+
 # evaluate best model and save the state dict
 best_model.eval()
 test(best_model, test_loader, device)
-
-torch.save(best_model.state_dict(), results_path+'model.pt')
