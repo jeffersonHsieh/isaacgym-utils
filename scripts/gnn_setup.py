@@ -185,15 +185,46 @@ def train(model, optimizer, criterion, train_loader, epoch, device):
         print('[EPOCH {}] Train loss: {}'.format(epoch, train_loss))
     return train_loss
 
+def first_value(e):
+    return e[0]
+
+def print_loss_by_tree(base, val, epoch):
+    zipped = list(zip(base, val))
+    zipped.sort(key=first_value) 
+
+    base = [x for (x,y) in zipped]
+    val = [y for (x,y) in zipped]
+    
+    fig = plt.figure()
+    ax = fig.add_subplot(111)
+    ax.plot(base, val)
+    ax.set_xlabel("base loss")
+    ax.set_ylabel("validation loss")
+    display(fig)
+    plt.savefig(results_path+"base_vs_val_by_tree_epoch%s"%epoch)
+    clear_output(wait=True)
+
 def validate(model, criterion, val_loader, epoch, device):
     model.eval()
     running_l2_norm = 0
     running_l2_norm_base = 0
     num_graphs = 0
+    base_loss_by_tree_list = []
+    val_loss_by_tree_list = []
     for batch in val_loader:
-        print(np.shape(batch.y)) #Flattened to two dimensions: torch.Size([2304, 3]) => (nodes x trees, position)
+        #print(np.shape(batch.y)) #Flattened to two dimensions: torch.Size([2304, 3]) => (nodes x trees, position)
         batch.to(device)
         out = model(batch)
+        # only do this like every tenth epoch or so
+        y_tree_array = batch.y.detach().cpu().numpy()
+        y_tree_array = np.reshape(y_tree_array, (batch.num_graphs,int(len(batch.y)/batch.num_graphs),3)) # only works if we just take positions into account (no orientation)
+        x_tree_array = batch.x.detach().cpu().numpy()
+        x_tree_array = np.reshape(x_tree_array, (batch.num_graphs,int(len(batch.y)/batch.num_graphs),7)) # only works if we just take positions into account (no orientation)
+        pred_array = out.detach().cpu().numpy()
+        pred_array = np.reshape(pred_array, (batch.num_graphs,int(len(batch.y)/batch.num_graphs),3)) # only works if we just take positions into account (no orientation)
+
+        base_loss_by_tree = np.sum(np.linalg.norm(x_tree_array[:,:,:3] - y_tree_array[:,:,:3], axis=2), axis=1)*batch.num_graphs/len(batch.y)
+        val_loss_by_tree = np.sum(np.linalg.norm(pred_array[:,:,:3] - y_tree_array[:,:,:3], axis=2), axis=1)*batch.num_graphs/len(batch.y)
         #print("####################")
         #print(batch.y[:20,:3])
         #print("--------------------")
@@ -204,6 +235,13 @@ def validate(model, criterion, val_loader, epoch, device):
         num_graphs+=out.size()[0]
         #loss = criterion(out[:,:3], batch.y[:,:3])
         #running_loss += loss.item()
+    
+    # only do this like every tenth epoch or so
+    base_loss_by_tree_list = base_loss_by_tree_list + base_loss_by_tree.tolist()
+    val_loss_by_tree_list = val_loss_by_tree_list + val_loss_by_tree.tolist()
+
+    print_loss_by_tree(base_loss_by_tree_list, val_loss_by_tree_list, epoch)
+
     val_loss = running_l2_norm/num_graphs
     base_loss = running_l2_norm_base/num_graphs
     if epoch%10==0:
@@ -277,7 +315,7 @@ def visualize_graph(X, Y, X_0, edge_index, force_node, force, name):
                     Line2D([0], [0], color=[1,0,0,1], lw=4),
                     Line2D([0], [0], color=[0,1,0,1], lw=4)]
 
-    ax.legend(custom_lines, ['Input', 'GT', 'Predicted'])
+    ax.legend(custom_lines, ['Input', 'Predicted', 'GT'])
     
     
     ax = set_axes_equal(ax)
@@ -592,8 +630,8 @@ def add_shortcuts(X_edges, original_edges):
             for descendant in get_indirect_descendants(original_edges, parent):
                 X_edges = np.append(X_edges, [[parent, descendant]], axis=0)
             explored.append(parent)
-    print(original_edges)
-    print(X_edges)
+    #print(original_edges)
+    #print(X_edges)
     return X_edges
 
 
@@ -855,6 +893,7 @@ parser.add_argument("-btchs", type=int, default=256, dest="batch_size", help="ba
 parser.add_argument("-ilr", type=float, default=2e-3, dest="learn_rate", help="initial learning rate")
 parser.add_argument("-ath", type=bool, default=True, dest="add_thickness", help="wether or not to add branch thickness")
 parser.add_argument("-ash", type=bool, default=False, dest="add_shortcuts", help="wether or not generate shortcuts")
+parser.add_argument("-cuda", type=int, dest="cuda", help="cuda gpu to run on")
 
 args = parser.parse_args()
 
@@ -968,7 +1007,10 @@ print("[%s] done"%datetime.datetime.now())
 
 # Setup GCN
 print("[%s] setting up GCN"%datetime.datetime.now())
-device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+if args.cuda is not None:
+    device = torch.device('cuda:%s'%args.cuda if torch.cuda.is_available() else 'cpu')
+else:
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 if not torch.cuda.is_available():
     print("running on CPU")
 
@@ -1006,9 +1048,11 @@ for epoch in range(1, args.n_epochs):
     base_loss_history.append(baseline_loss)
     if epoch%10==0:
         print(scheduler._last_lr)
+    if epoch%20==0:
+        torch.save(best_model.state_dict(), results_path+'model_epoch%s.pt'%epoch)
     
     # log with wandb
-    wandb.log({"training loss": train_loss, "validation loss": val_loss, "baseline_loss": baseline_loss, "epoch": epoch, "learning rate": scheduler._last_lr})
+    wandb.log({"training loss": train_loss, "validation loss": val_loss, "baseline_loss": baseline_loss, "epoch": epoch, "learning rate": scheduler._last_lr[0]})
 
     ax.clear()
     ax.plot(train_loss_history, 'r', label='train')
