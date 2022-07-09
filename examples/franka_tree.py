@@ -11,8 +11,7 @@ from isaacgym_utils.assets import GymTree
 from isaacgym_utils.camera import GymCamera
 from isaacgym_utils.math_utils import RigidTransform_to_transform, np_to_vec3, vec3_to_np, quat_to_np
 from isaacgym_utils.policy import GraspBlockPolicy, MoveBlockPolicy
-from isaacgym_utils.draw import draw_transforms, draw_contacts, draw_camera, draw_spheres, draw_transforms_contact
-
+from isaacgym_utils.draw import draw_transforms, draw_contacts, draw_camera, draw_spheres
 import pdb
 import sys
 
@@ -70,8 +69,7 @@ if __name__ == "__main__":
             # print(f"random index {random_index}")
 
             contact_transform = (loc_tree)
-            draw_transforms_contact(scene, [env_idx], [contact_transform])
-
+  
 
     def custom_draws(scene):
         global contact_transform
@@ -104,9 +102,7 @@ if __name__ == "__main__":
             # , ee_transform_l7, ee_transform_l8, ee_transform_l9, ee_transform_l10, ee_transform_l11, ee_transform_l12 ]
             draw_transforms(scene, [env_idx], transforms)
 
-            draw_transforms_contact(scene, [env_idx], [contact_transform])
-
-
+       
         draw_contacts(scene, scene.env_idxs)
 
     
