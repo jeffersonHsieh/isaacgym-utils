@@ -21,7 +21,7 @@ import datetime
 
 PATH = "/mnt/hdd/jan-malte/8Nodes_new/" #"/home/jan-malte/Dataset/8Nodes/" #"/home/jan-malte/Dataset/" #"/media/jan-malte/INTENSO/"
 
-def import_tree(name_dict, urdf_path, yaml_path, edge_def, stiffness_list, damping_list, tree_num):
+def import_tree(name_dict, urdf_path, yaml_path, edge_def, stiffness_list, damping_list, tree_num, tree_pts):
     global no_contact, force, loc_tree, random_index, contact_transform, not_saved
     with open(yaml_path, "r") as f:
         cfg = yaml.load(f, Loader=yaml.Loader)
@@ -120,11 +120,11 @@ def import_tree(name_dict, urdf_path, yaml_path, edge_def, stiffness_list, dampi
 
         print(f" ********* saving data ********* ")
         #print(np.shape(vertex_init_pos_list_arg))
-        save(PATH + 'X_vertex_init_pos_tree%s_env%s'%(tree_num, env_idx), vertex_init_pos_list_arg )
+        save(PATH + '[%s]X_vertex_init_pos_tree%s_env%s'%(tree_pts, tree_num, env_idx), vertex_init_pos_list_arg )
         #save('X_coeff_stiff_damp_tree%s_env%s'%(tree_num, env_idx), coeff_stiff_damp )
         #save('X_edge_def_tree%s_env%s'%(tree_num, env_idx), edge_def )
-        save(PATH + 'X_force_applied_tree%s_env%s'%(tree_num, env_idx), force_applied_list_arg )
-        save(PATH + 'Y_vertex_final_pos_tree%s_env%s'%(tree_num, env_idx), vertex_final_pos_list_arg )
+        save(PATH + '[%s]X_force_applied_tree%s_env%s'%(tree_pts, tree_num, env_idx), force_applied_list_arg )
+        save(PATH + '[%s]Y_vertex_final_pos_tree%s_env%s'%(tree_pts, tree_num, env_idx), vertex_final_pos_list_arg )
 
         #print(f"Vinit, Vfinal, Fapplied lengths: {vertex_init_pos_list}")
         #sys.exit() 
@@ -172,8 +172,8 @@ def import_tree(name_dict, urdf_path, yaml_path, edge_def, stiffness_list, dampi
     last_timestamp = [0] * scene._n_envs
 
     coeff_stiff_damp = get_stiffness()
-    save(PATH + 'X_coeff_stiff_damp_tree%s'%(tree_num), coeff_stiff_damp)
-    save(PATH + 'X_edge_def_tree%s'%(tree_num), edge_def)
+    save(PATH + '[%s]X_coeff_stiff_damp_tree%s'%(tree_pts,tree_num), coeff_stiff_damp)
+    save(PATH + '[%s]X_edge_def_tree%s'%(tree_pts,tree_num), edge_def)
 
     def policy(scene, env_idx, t_step, t_sim): #TODO: Fix issue where this saves init and final vetor identically
         global rand_idxs, force_vecs, current_pos, last_timestamp, push_switch, done, push_num, last_pos, no_contact, force, loc_tree, random_index, contact_transform, force_vecs, rand_idxs, vertex_init_pos_list, vertex_final_pos_list, force_applied_list, vertex_init_pos, vertex_final_pos, force_applied, not_saved
