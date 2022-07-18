@@ -20,9 +20,10 @@ from mpl_toolkits.mplot3d import proj3d
 import wandb
 import argparse
 import datetime
+from torch.autograd import Variable
 
-DATASET_DIR = "/mnt/hdd/jan-malte/NEW_DATASET/8Nodes_by_tree/"
-TREE_NUM = 36
+DATASET_DIR = "/mnt/hdd/jan-malte/8Nodes_new_by_tree/"
+TREE_NUM = 5
 N_GRAPH_NODES = 8
 N_EPOCHS = 10
 NODE_TRANSFORM = True
@@ -30,9 +31,9 @@ SCHED_PATIENCE = 10
 TIP_THICKNESS = 0.01
 
 
-seed = 0
-np.random.seed(seed)
-random.seed(seed)
+#seed = 0
+#np.random.seed(seed)
+#random.seed(seed)
 
 ######## NETWORK DEF START ########
 
@@ -64,7 +65,6 @@ class FGCNResidualBlock(torch.nn.Module):
 
 class FGCN(torch.nn.Module): 
     def __init__(self, n_graph_nodes, in_size, out_size):
-        #print("number of graph nodes: %s"%n_graph_nodes)
         super().__init__()
         hidden_size = 1280 
         p = 0.4
@@ -167,16 +167,23 @@ class Arrow3D(FancyArrowPatch):
 
         return np.min(zs)
 
-def train(model, optimizer, criterion, train_loader, epoch, device):
+# 0: no graph alteration
+# 1: transform into node representation (graph nodes are tree points)
+# 2: transform into node representation with thickness parameter
+# 3: load as orientational representation
+# 4: load as orientational representation with rpy angles
+def train(model, optimizer, criterion, train_loader, epoch, device, out_size, profile):
     model.train()
     running_loss = 0
     for batch in train_loader:
         optimizer.zero_grad()
         batch.to(device)
         out = model(batch)
-        #print(np.shape(out))
-        #print(np.shape(batch.y))
-        loss = criterion(out[:,:7], batch.y[:,:7])
+        if profile == 3 or profile == 4: # if we learn orientation
+            out_end = 3 + out_size
+            loss = criterion(out[:,:], batch.y[:,3:out_end]) # assumes that xyz are the first 3 dimensions of y
+        else:
+            loss = criterion(out[:,:], batch.y[:,:out_size])
         loss.backward()
         optimizer.step()
         running_loss += loss.item()
@@ -197,80 +204,175 @@ def print_loss_by_tree(base, val, epoch):
     
     fig = plt.figure()
     ax = fig.add_subplot(111)
-    ax.plot(base, val)
+    ax.scatter(base, val, s=4)
     ax.set_xlabel("base loss")
     ax.set_ylabel("validation loss")
     display(fig)
     plt.savefig(results_path+"base_vs_val_by_tree_epoch%s"%epoch)
     clear_output(wait=True)
 
-def validate(model, criterion, val_loader, epoch, device):
+def validate(model, criterion, val_loader, epoch, device, profile, out_size):
     model.eval()
     running_l2_norm = 0
     running_l2_norm_base = 0
     num_graphs = 0
     base_loss_by_tree_list = []
     val_loss_by_tree_list = []
+    ori_end = 3 + out_size
+
     for batch in val_loader:
-        #print(np.shape(batch.y)) #Flattened to two dimensions: torch.Size([2304, 3]) => (nodes x trees, position)
         batch.to(device)
         out = model(batch)
         # only do this like every tenth epoch or so
-        y_tree_array = batch.y.detach().cpu().numpy()
-        y_tree_array = np.reshape(y_tree_array, (batch.num_graphs,int(len(batch.y)/batch.num_graphs),3)) # only works if we just take positions into account (no orientation)
-        x_tree_array = batch.x.detach().cpu().numpy()
-        x_tree_array = np.reshape(x_tree_array, (batch.num_graphs,int(len(batch.y)/batch.num_graphs),7)) # only works if we just take positions into account (no orientation)
-        pred_array = out.detach().cpu().numpy()
-        pred_array = np.reshape(pred_array, (batch.num_graphs,int(len(batch.y)/batch.num_graphs),3)) # only works if we just take positions into account (no orientation)
+        if epoch%10 == 0:
+            y_tree_array = batch.y.detach().cpu().numpy()
+            x_tree_array = batch.x.detach().cpu().numpy()
+            pred_array = out.detach().cpu().numpy()
+            
+            y_shape = np.shape(y_tree_array)
+            x_shape = np.shape(x_tree_array)
+            pred_shape = np.shape(pred_array)
 
-        base_loss_by_tree = np.sum(np.linalg.norm(x_tree_array[:,:,:3] - y_tree_array[:,:,:3], axis=2), axis=1)*batch.num_graphs/len(batch.y)
-        val_loss_by_tree = np.sum(np.linalg.norm(pred_array[:,:,:3] - y_tree_array[:,:,:3], axis=2), axis=1)*batch.num_graphs/len(batch.y)
-        #print("####################")
-        #print(batch.y[:20,:3])
-        #print("--------------------")
-        #print(out[:20,:3])
-        #print("####################")
-        running_l2_norm += torch.sum(torch.norm(out[:,:3]-batch.y[:,:3], dim=1)).item()
-        running_l2_norm_base += torch.sum(torch.norm(batch.x[:,:3]-batch.y[:,:3], dim=1)).item() # compare to baseline where tree was not moved at all
-        num_graphs+=out.size()[0]
-        #loss = criterion(out[:,:3], batch.y[:,:3])
-        #running_loss += loss.item()
-    
-    # only do this like every tenth epoch or so
-    base_loss_by_tree_list = base_loss_by_tree_list + base_loss_by_tree.tolist()
-    val_loss_by_tree_list = val_loss_by_tree_list + val_loss_by_tree.tolist()
+            if profile == 3 or profile == 4:
+                y_tree_array = np.reshape(y_tree_array, (batch.num_graphs,int(len(batch.y)/batch.num_graphs), y_shape[1])) 
+                x_tree_array = np.reshape(x_tree_array, (batch.num_graphs,int(len(batch.y)/batch.num_graphs), x_shape[1])) 
+                pred_array = np.reshape(pred_array, (batch.num_graphs,int(len(batch.y)/batch.num_graphs), pred_shape[1]))
 
-    print_loss_by_tree(base_loss_by_tree_list, val_loss_by_tree_list, epoch)
+                base_loss_by_tree = []
+                val_loss_by_tree = []
+                for tree_idx in range(0,len(y_tree_array)):
+                    base_loss_by_tree.append(criterion(torch.tensor(x_tree_array[tree_idx,:,3:ori_end]), torch.tensor(y_tree_array[tree_idx,:,3:ori_end]))) 
+                    val_loss_by_tree.append(criterion(torch.tensor(pred_array[tree_idx]), torch.tensor(y_tree_array[tree_idx,:,3:ori_end])))
+                base_loss_by_tree = torch.tensor(base_loss_by_tree)
+                val_loss_by_tree = torch.tensor(val_loss_by_tree)
+            else:
+                y_tree_array = np.reshape(y_tree_array, (batch.num_graphs,int(len(batch.y)/batch.num_graphs),y_shape[1])) # only works if we just take positions into account (no orientation)
+                x_tree_array = np.reshape(x_tree_array, (batch.num_graphs,int(len(batch.y)/batch.num_graphs),x_shape[1])) # only works if we just take positions into account (no orientation)
+                pred_array = np.reshape(pred_array, (batch.num_graphs,int(len(batch.y)/batch.num_graphs),pred_shape[1])) # only works if we just take positions into account (no orientation)
 
-    val_loss = running_l2_norm/num_graphs
-    base_loss = running_l2_norm_base/num_graphs
+                base_loss_by_tree = np.sum(np.linalg.norm(x_tree_array[:,:,:3] - y_tree_array[:,:,:3], axis=2), axis=1)*batch.num_graphs/len(batch.y)
+                val_loss_by_tree = np.sum(np.linalg.norm(pred_array[:,:,:] - y_tree_array[:,:,:3], axis=2), axis=1)*batch.num_graphs/len(batch.y)
+
+            base_loss_by_tree_list = base_loss_by_tree_list + base_loss_by_tree.tolist()
+            val_loss_by_tree_list = val_loss_by_tree_list + val_loss_by_tree.tolist()
+
+        if profile == 3 or profile == 4:
+            running_l2_norm += criterion(out[:,:], batch.y[:,3:ori_end]).item()
+            running_l2_norm_base += criterion(batch.x[:,3:ori_end], batch.y[:,3:ori_end]).item()   
+        else:
+            running_l2_norm += torch.sum(torch.norm(out[:,:] - batch.y[:,:out_size], dim=1)).item()
+            running_l2_norm_base += torch.sum(torch.norm(batch.x[:,:out_size] - batch.y[:,:out_size], dim=1)).item()
+            num_graphs+=out.size()[0]
+
+    # print validation error per tree
+    if epoch%10 == 0:
+        print_loss_by_tree(base_loss_by_tree_list, val_loss_by_tree_list, epoch)
+
+    # average the loss functions  
+    if profile == 3 or profile == 4:
+        val_loss = running_l2_norm/len(val_loader)
+        base_loss = running_l2_norm_base/len(val_loader)
+    else:
+        val_loss = running_l2_norm/num_graphs
+        base_loss = running_l2_norm_base/num_graphs
+
+    # print loss
     if epoch%10==0:
         print('[EPOCH {}] Validation loss: {}'.format(epoch, val_loss))
         print("[EPOCH {}] Baseline loss: {}".format(epoch, base_loss))
     return val_loss, base_loss
 
-def test(model, test_loader, device):
+def assign_position(node_index, original_tree, rotations, parent_pos, parent_rot, len_idx):
+    distance = original_tree[node_index][len_idx]
+    rot_mat = Rotation.from_quat(rotations[node_index]) * parent_rot
+    new_pos = parent_pos + rot_mat.as_matrix().dot(np.array([0,0,distance]))
+    return new_pos, rot_mat
+
+def get_parent(node, edges):
+    for parent, child in edges:
+        if child == node:
+            return parent
+    return None
+
+def find_root(edges):
+    for idx, _ in edges:
+        parent = edges[idx][0]
+        child = edges[idx][1]
+        if get_parent(parent, edges) is None:
+            return parent
+    return None
+
+def reconstruct_positional_data(rotations, edges, init_pos, rpy=False):
+    len_idx = 7
+    rot_shape = np.shape(rotations)
+    if rot_shape[1] == 3 or rpy:
+        len_idx = 6
+        rotations = np.reshape(rotations,(-1,3))
+        rotations = rot_from_rpy(rotations) # if we get rotations in rpy transform them into quaternion
+    #edges = edges.detach().cpu().numpy()
+    new_out = [[0,0,0]]*len(init_pos)
+    help_edges = []
+    for idx, _ in enumerate(edges[0]):
+        help_edges.append((edges[0][idx], edges[1][idx]))
+    
+    frontier = [0] #ASSUMPTION: Root node is always indexed with 0
+    explored = []
+    parent_rots = {0:Rotation.from_quat(rotations[0])}
+    while len(frontier) != 0:
+        parent = frontier.pop(0)
+        explored.append(parent)
+        children = find_children(help_edges, parent)
+        parent_pos = new_out[parent]
+        for child in children:
+            if child not in explored:
+                pos, rot = assign_position(child, init_pos, rotations, parent_pos, parent_rots[parent], len_idx) #.detach().cpu().numpy()
+                new_out[child] = list(pos)
+                parent_rots[child] = rot
+                frontier.append(child)
+
+    new_out = torch.tensor(new_out)
+    return new_out  
+
+def test(model, test_loader, device, profile, out_size):
     model.eval()
     running_l2_norm = 0
+    running_l2_norm_base = 0
     num_graphs = 0
     idx = 0
+    ori_end = 3+out_size
     for batch in test_loader:
         batch.to(device)
         out = model(batch)
-        running_l2_norm += torch.sum(torch.norm(out[:,:3]-batch.y[:,:3], dim=1))
+        y = batch.y
+        x = batch.x
+        force = batch.x[:,-3:]
+        if profile==3 or profile==4:
+            roty = batch.y.detach().cpu().numpy()[:,3:ori_end]
+            rotx = batch.x.detach().cpu().numpy()[:,3:ori_end]
+
+            rpy = profile==4
+            out = reconstruct_positional_data(out.detach().cpu().numpy(), batch.edge_index.detach().cpu().numpy(), batch.x.detach().cpu().numpy(), rpy=rpy).to(device)
+            y = reconstruct_positional_data(roty, batch.edge_index.detach().cpu().numpy(), batch.x.detach().cpu().numpy(), rpy=rpy).to(device)
+            x = reconstruct_positional_data(rotx, batch.edge_index.detach().cpu().numpy(), batch.x.detach().cpu().numpy(), rpy=rpy).to(device)
+
+        running_l2_norm += torch.sum(torch.norm(out[:,:3]-y[:,:3], dim=1))
+        running_l2_norm_base += torch.sum(torch.norm(x[:,:3]-y[:,:3], dim=1))
         num_graphs+=out.size()[0]
         if idx < 10:
             visualize_graph(out[:,:3], 
-                            batch.y[:,:3], 
-                            batch.x[:,:3], 
+                            y[:,:3], 
+                            x[:,:3], 
                             batch.edge_index, batch.force_node[0], 
-                            batch.x[:,-3:], results_path+"prediction_example%s"%idx)
-        idx += 1
+                            force, results_path+"prediction_example%s"%idx)
+        idx += 1 
     l2_norm = running_l2_norm/num_graphs
+    l2_base = running_l2_norm_base/num_graphs
     print('Average node distance error: {}'.format(l2_norm))
+    print('Average base node displacement: {}'.format(l2_base))
 
 def visualize_graph(X, Y, X_0, edge_index, force_node, force, name):
     force = force.detach().cpu().numpy()
+    print(force)
     
     force_vector = force[force_node]/np.linalg.norm(force[force_node])/2
     force_A = X_0.detach().cpu().numpy()[force_node]
@@ -514,10 +616,6 @@ def make_directed_and_prune_augment(X_edges, X_force, X_pos, Y_pos, make_directe
     for i in range(num_graphs):
         # Find the node that force is applied on
         force_index = np.argwhere(np.sum(np.abs(X_force[i]), axis=1))[0,0]
-        #print(X_force[i][force_index])
-        #if i < 5:
-            #print(X_pos[i][:,:3]-Y_pos[i][:,:3])
-            #print(Y_pos[i][:,:3])
         # Only keep the edges from force_index to the root
         trunk = get_trunk(parents, force_index)
         # Find leaf of the trunk
@@ -623,18 +721,6 @@ def get_indirect_descendants(X_edges, node): #assumes non loopy graphs
                 frontier.append(child)
     return descendants
 
-def add_shortcuts(X_edges, original_edges):
-    explored = []
-    for parent, child in original_edges:
-        if parent not in explored:
-            for descendant in get_indirect_descendants(original_edges, parent):
-                X_edges = np.append(X_edges, [[parent, descendant]], axis=0)
-            explored.append(parent)
-    #print(original_edges)
-    #print(X_edges)
-    return X_edges
-
-
 def rotate_augment(X_edges, X_force, X_pos, Y_pos, rotate_augment_factor=5, stddev_x_angle=0.2, stddev_y_angle=0.2):
     """
     Augment the graph by random rotation.
@@ -688,20 +774,41 @@ def rotate_augment(X_edges, X_force, X_pos, Y_pos, rotate_augment_factor=5, stdd
             
     return new_X_edges, new_X_force, new_X_pos, new_Y_pos
 
-def load_npy(data_dir, tree_num):
+def load_npy(data_dir, tree_num, orientational):
     # Load npy files from dataset_dir. A shortcut to 'sample_1_push' shared folder has been added to 'My Drive' 
-    X_stiffness_damping = np.load(os.path.join(data_dir, 'X_coeff_stiff_damp_tree%s.npy'%tree_num))
-    X_edges = np.load(os.path.join(data_dir, 'X_edge_def_tree%s.npy'%tree_num))
-    X_force = np.load(os.path.join(data_dir, 'X_force_applied_tree%s_clean.npy'%tree_num))
-    X_pos = np.load(os.path.join(data_dir, 'X_vertex_init_tree%s_clean.npy'%tree_num))
-    Y_pos = np.load(os.path.join(data_dir, 'Y_vertex_final_tree%s_clean.npy'%tree_num))
+    if orientational:
+        X_stiffness_damping = np.load(os.path.join(data_dir, 'X_coeff_stiff_damp_tree%s.npy'%tree_num))
+        X_edges = np.load(os.path.join(data_dir, 'X_edge_def_tree%s_ori.npy'%tree_num))
+        X_force = np.load(os.path.join(data_dir, 'X_force_applied_tree%s_ori.npy'%tree_num))
+        X_pos = np.load(os.path.join(data_dir, 'X_vertex_init_tree%s_ori.npy'%tree_num))
+        Y_pos = np.load(os.path.join(data_dir, 'Y_vertex_final_tree%s_ori.npy'%tree_num))
+    else:
+        #X_stiffness_damping = np.load(os.path.join(data_dir, 'X_coeff_stiff_damp_tree%s.npy'%tree_num))
+        #X_edges = np.load(os.path.join(data_dir, 'X_edge_def_tree%s.npy'%tree_num))
+        #X_force = np.load(os.path.join(data_dir, 'X_force_applied_tree%s_clean.npy'%tree_num))
+        #X_pos = np.load(os.path.join(data_dir, 'X_vertex_init_tree%s_clean.npy'%tree_num))
+        #Y_pos = np.load(os.path.join(data_dir, 'Y_vertex_final_tree%s_clean.npy'%tree_num))
 
-    # Truncate node orientations and tranpose to shape (num_graphs, num_nodes, 3)
-    X_pos = X_pos[:, :7, :].transpose((0,2,1))
-    Y_pos = Y_pos[:, :7, :].transpose((0,2,1))
-    X_force = X_force.transpose((0,2,1))
+        X_stiffness_damping = np.load(os.path.join(data_dir, 'X_coeff_stiff_damp_tree%s.npy'%tree_num))
+        X_edges = np.load(os.path.join(data_dir, 'X_edge_def_tree%s.npy'%tree_num))
+        X_force = np.load(os.path.join(data_dir, 'X_force_applied_tree%s.npy'%tree_num))
+        X_pos = np.load(os.path.join(data_dir, 'X_vertex_init_pose_tree%s.npy'%tree_num))
+        Y_pos = np.load(os.path.join(data_dir, 'Y_vertex_final_pos_tree%s.npy'%tree_num))
+
+        # Truncate node orientations and tranpose to shape (num_graphs, num_nodes, 3)
+        X_pos = X_pos[:, :7, :].transpose((0,2,1))
+        Y_pos = Y_pos[:, :7, :].transpose((0,2,1))
+        X_force = X_force.transpose((0,2,1))
 
     return X_edges, X_force, X_pos, Y_pos
+
+def adjust_indexing_single(in_list, deleted_index):
+    new_list = []
+    for i in in_list:
+        if i > deleted_index:
+            i = i-1
+        new_list.append(i)
+    return new_list
 
 def adjust_indexing(tuple_list, deleted_index):
     new_tuple_list = []
@@ -716,8 +823,6 @@ def adjust_indexing(tuple_list, deleted_index):
 def remove_duplicate(original, duplicate, edge_def, init_positions, final_positions, duplicates, forces):
     init_positions = np.delete(init_positions, duplicate, axis=1)
     final_positions = np.delete(final_positions, duplicate, axis=1)
-    #print(np.shape(init_positions))
-    #print(np.shape(final_positions))
 
     new_edge_def = []
     new_duplicates = []
@@ -735,13 +840,58 @@ def remove_duplicate(original, duplicate, edge_def, init_positions, final_positi
 
     for idx, force in enumerate(forces):
         if np.linalg.norm(force[duplicate]) != 0:
-            #print(forces[idx][original])
             forces[idx][original] += forces[idx][duplicate]
-            #print(forces[idx][original])
     
     forces = np.delete(forces, duplicate, axis=1)
 
     return new_edge_def, init_positions, final_positions, new_duplicates, forces
+
+def remove_tip(tip_index, edges, init_positions, final_positions, X_force):
+    init_positions = np.delete(init_positions, tip_index, axis=1)
+    final_positions = np.delete(final_positions, tip_index, axis=1)
+    illegal_pushes = []
+    for idx, force in enumerate(X_force): # If a push occurs on a tip that needs to be removed, delete the entire push
+        if np.linalg.norm(force[tip_index]) != 0:
+            illegal_pushes.append(idx)
+    X_force = np.delete(X_force, tip_index, axis=1)
+    while len(illegal_pushes) > 0:
+        push_idx = illegal_pushes.pop() # remove currently highest index illegal push and delete it
+        init_positions = np.delete(init_positions, push_idx, axis=0)
+        final_positions = np.delete(final_positions, push_idx, axis=0)
+        X_force = np.delete(X_force, push_idx, axis=0)
+    new_edges = []
+    for parent, child in edges:
+        if child != tip_index:
+            new_edges.append((parent, child))
+    return new_edges, init_positions, final_positions, X_force
+
+def prune_tip_links(edges, init_positions, final_positions, X_force):
+
+    init_positions = add_length_parameter(edges, init_positions)
+    tree_representative = init_positions[0]
+    tips = []
+    for i, node in enumerate(tree_representative):
+        if len(find_children(edges, i)) == 0:
+            tips.append(i)
+    while len(tips) > 0:
+        tip_index = tips.pop()
+        edges, init_positions, final_positions, X_force = remove_tip(tip_index, edges, init_positions, final_positions, X_force)
+        tips = adjust_indexing_single(tips, tip_index)
+        edges = adjust_indexing(edges, tip_index)
+    edges = np.array(edges)
+    return edges, init_positions, final_positions, X_force
+
+def add_length_parameter(X_edges, X_pos):
+    length_list = [0]*np.shape(X_pos)[1]
+    tree_rep = X_pos[0]
+    for parent, child in X_edges:
+        length = np.linalg.norm(tree_rep[child][:3] - tree_rep[parent][:3])
+        length_list[parent] = length
+    length_arr = np.tile(np.array(length_list), (np.shape(X_pos)[0],1))
+    length_arr = np.reshape(length_arr, (np.shape(X_pos)[0], np.shape(X_pos)[1], 1))
+    X_pos = np.append(X_pos, length_arr, axis=2)
+    return X_pos
+
 
 def has_same_parent(i,j,edges):
     for parent, child in edges:
@@ -751,37 +901,25 @@ def has_same_parent(i,j,edges):
             parent_j = parent
     return parent_i == parent_j
 
-def remove_duplicate_nodes(edges, init_positions, final_positions, X_force): # TODO: fix issue with force index -> force given per node, needs to be adjusted too.
-    #print(np.shape(X_force))
+def remove_duplicate_nodes(edges, init_positions, final_positions, X_force):
     tree_representative = init_positions[0]
     tree_representative = np.around(tree_representative, decimals=4)
-    #print(init_positions[0,:,:3])
-    #print(np.shape(tree_representative))
     duplicates = [(0,1)] #treat 0 and 1 as duplicates, as 0 represents the base_link aka the floor, which should behave like the root
     for i, node in enumerate(tree_representative):
         for j, nodec in enumerate(tree_representative):
-            #print(np.shape(np.vstack((tree_representative[:i],tree_representative[i+1:]))))
             if (node[:3] == nodec[:3]).all() and i != j and has_same_parent(i,j,edges):
                 if i < j:
                     duplicates.append((i,j))
                 else:
                     duplicates.append((j,i))
-            #print("---------------------")
     duplicates = list(set(duplicates))
-    #print(duplicates)
-    #print(edges)
     while len(duplicates) > 0:
         original, duplicate = duplicates.pop()
         edges, init_positions, final_positions, duplicates, X_force = remove_duplicate(original, duplicate, edges, init_positions, final_positions, duplicates, X_force)
         duplicates = list(set(duplicates))
         duplicates = adjust_indexing(duplicates, duplicate)
         edges = adjust_indexing(edges, duplicate)
-        #print(duplicates)
-        #print(edges)
     edges = np.array(edges)
-    #print(init_positions[0,:,:3])
-    #print(np.shape(init_positions[:,:,:3]))
-    #print(np.shape(X_force))
     return edges, init_positions[:,:,:3], final_positions[:,:,:3], X_force
 
 def find_children(edges, node):
@@ -810,16 +948,115 @@ def add_thickness(X_edges, X_pos):
     thickness_list = assign_thickness(X_edges, thickness_list, 0)
     thickness_arr = np.tile(np.array(thickness_list), (np.shape(X_pos)[0],1))
     thickness_arr = np.reshape(thickness_arr, (np.shape(X_pos)[0], np.shape(X_pos)[1], 1))
-    X_edges = np.append(X_pos, thickness_arr, axis=2)
-    return X_edges
+    X_pos = np.append(X_pos, thickness_arr, axis=2)
+    return X_pos
 
-def make_dataset(X_edges, X_force, X_pos, Y_pos, 
-                 make_directed=True, prune_augmented=False, rotate_augmented=False, just_tree_points=True, add_thickness_bool=True, add_shortcuts_bool=True): # CALLED PER TREE
+def calculate_orientational_data(X_edges, X_pos, Y_pos, X_force): #something in this function is off -> gives incorrect rot data.
+    #remove useless quat data
+    X_pos = X_pos[:,:,:3]
+    Y_pos = Y_pos[:,:,:3]
+    shape = np.shape(X_pos)
+    init_quat_data = np.zeros((shape[0], shape[1], 4))
+    final_quat_data = np.zeros((shape[0], shape[1], 4)) 
+    for push_idx in range(0,shape[0]):
+        init_inv_rot_dict = {} #dictionary to store inverse rotations => used to calculate relative rotation
+        final_inv_rot_dict = {} #dictionary to store inverse rotations => used to calculate relative rotation
+        for parent, child in X_edges:
+            rot_init = calculate_rot(X_pos[push_idx][parent], X_pos[push_idx][child])
+            rot_final = calculate_rot(Y_pos[push_idx,parent], Y_pos[push_idx,child])
+            if parent == 0: #ASSUMPTION: Root node is always labelled 0 in the dataset
+                init_inv_rot = rot_init.inv()
+                final_inv_rot = rot_final.inv()
+            else:
+                parents_parent = get_parent(parent, X_edges)
+                rot_init = rot_init * init_inv_rot_dict[parents_parent] # rot = rot_self*rot_parent => rot_self = rot*rot_parent^(-1)
+                rot_final = rot_final * final_inv_rot_dict[parents_parent]
+                init_inv_rot = init_inv_rot_dict[parents_parent] * rot_init.inv()
+                final_inv_rot =  final_inv_rot_dict[parents_parent] * rot_final.inv()
+                
+            quat_init = rot_init.as_quat()
+            quat_final = rot_final.as_quat()
+
+            init_quat_data[push_idx][parent] = quat_init
+            final_quat_data[push_idx][parent] = quat_final
+            
+            if parent not in init_inv_rot_dict.keys():
+                init_inv_rot_dict[parent] = init_inv_rot
+                final_inv_rot_dict[parent] = final_inv_rot
+
+    X_pos = np.append(X_pos, init_quat_data, axis=2)
+    Y_pos = np.append(Y_pos, final_quat_data, axis=2)
+    X_edges, X_pos, Y_pos, X_force = prune_tip_links(X_edges, X_pos, Y_pos, X_force)
+    return X_edges, X_pos, Y_pos, X_force
+
+def calculate_rot(parent_pos, child_pos): #Function produces correct results -> Identical with ground truth
+        Z_tmp = child_pos - parent_pos
+        Z = Z_tmp/np.linalg.norm(Z_tmp)
+
+        if Z[2] == 1 and Z[1] == 0 and Z[0] == 0:
+            X = np.array([1,0,0])
+        else:
+            X_tmp = np.cross(Z, np.array([0,0,1]))
+            X = X_tmp/np.linalg.norm(X_tmp)
+
+        Y_tmp = np.cross(Z, X)
+        Y = Y_tmp/np.linalg.norm(Y_tmp)
+
+        R = np.vstack((X,Y,Z))
+        R = np.transpose(R)
+
+        rot = Rotation.from_matrix(R)
+        return rot
+
+def rot_from_rpy(arr): #for use with batches with 2 dim
+    shape = np.shape(arr)
+    if shape[1] == 3: # only rpy present
+        quat_arr = np.zeros((shape[0], 4))
+        for datapoint_idx in range(0, shape[0]):
+            rpy = arr[datapoint_idx]
+            rot = Rotation.from_euler("xyz", rpy)
+            quat_arr[datapoint_idx] = rot.as_quat()
+        arr = quat_arr
+    elif shape[1] >= 6: # rpy and position present
+        quat_arr = np.zeros((shape[0], 4))
+
+        for datapoint_idx in range(0, shape[0]):
+            rpy = arr[datapoint_idx][3:7]
+            rot = Rotation.from_euler("xyz", rpy)
+            quat_arr[datapoint_idx] = rot.as_quat()
+
+        arr = np.append(arr[:,:3], quat_arr)
+    return arr
+
+def rot_to_rpy(X_pos, Y_pos):
+    shape = np.shape(X_pos)
+    rot_x = np.zeros((shape[0], shape[1], 3))
+    rot_y = np.zeros((shape[0], shape[1], 3))
+
+    for tree_idx in range(0,shape[0]):
+        for node_idx in range(0,shape[1]):
+            quat_x = X_pos[tree_idx,node_idx,3:7]
+            quat_y = Y_pos[tree_idx,node_idx,3:7]
+            rotx = Rotation.from_quat(quat_x)
+            roty = Rotation.from_quat(quat_y)
+            rot_x[tree_idx][node_idx] = rotx.as_euler("xyz")
+            rot_y[tree_idx][node_idx] = roty.as_euler("xyz")
+
+    lengths = np.reshape(X_pos[:,:,7],(shape[0],shape[1],1))
+    X_pos = np.append(X_pos[:,:,:3], rot_x, axis=2)
+    X_pos = np.append(X_pos[:,:,:], lengths, axis=2)
+    Y_pos = np.append(Y_pos[:,:,:3], rot_y, axis=2)
+    return X_pos, Y_pos
+
+def make_dataset(X_edges, X_force, X_pos, Y_pos, profile,
+                 make_directed=True, prune_augmented=False, rotate_augmented=False): # CALLED PER TREE
     num_graphs = len(X_pos)
-    if just_tree_points:
+    if profile == 1 or profile == 2:
         X_edges, X_pos, Y_pos, X_force = remove_duplicate_nodes(X_edges, X_pos, Y_pos, X_force)
-        if add_thickness_bool:
+        if profile == 2:
             X_pos = add_thickness(X_edges, X_pos) #adds branch thickness as a fourth value to the 3 dimensional position argument for each node
+    if profile == 4:
+        X_pos, Y_pos = rot_to_rpy(X_pos, Y_pos)
 
     X_edges, X_force, X_pos, Y_pos = make_directed_and_prune_augment(X_edges, X_force, X_pos, Y_pos,
                                                                      make_directed=make_directed, 
@@ -855,7 +1092,6 @@ def shuffle_in_unison(a,b,c):
 def get_dataset_metrics(dataset):
     avg_displacements_per_node = []
     for tree_graph_push in dataset:
-        #print(tree_graph_push.x.numpy()[:,:3])
         avg_displacement_per_node = np.sum(np.linalg.norm(tree_graph_push.x.numpy()[:,:3] - tree_graph_push.y.numpy()[:,:3], axis=1))/len(tree_graph_push.x)
         avg_displacements_per_node.append(avg_displacement_per_node)
     column_diag_dict = {}
@@ -888,14 +1124,44 @@ parser.add_argument("-id", type=str, dest="id", help="id to identify the results
 parser.add_argument("-gn", type=int, default=8, dest="graph_nodes", help="number of layers the GCN will have") #number of graph nodes
 parser.add_argument("-ep", type=int, default=500, dest="n_epochs", help="number of epochs to run") # number of epochs
 parser.add_argument("-pat", type=int, default=50, dest="sched_patience", help="patience of the scheduler") #patience of scheduler
-parser.add_argument("-nt", type=bool, default=True, dest="node_transform", help="wether or not we transform the graph to tree node representation") # if node transform should be performed
 parser.add_argument("-btchs", type=int, default=256, dest="batch_size", help="batch size")
 parser.add_argument("-ilr", type=float, default=2e-3, dest="learn_rate", help="initial learning rate")
-parser.add_argument("-ath", type=bool, default=True, dest="add_thickness", help="wether or not to add branch thickness")
-parser.add_argument("-ash", type=bool, default=False, dest="add_shortcuts", help="wether or not generate shortcuts")
 parser.add_argument("-cuda", type=int, dest="cuda", help="cuda gpu to run on")
+parser.add_argument("-weights", type=str, dest="weights", help="saved model weights to load")
+
+parser.add_argument("-profile", type=int, default=0, choices=[0,1,2,3,4], dest="profile")
+#parser.add_argument("-ori", type=bool, default=False, dest="orientational", help="wether or not we use directional mode (only predict directional information)")
+#parser.add_argument("-rpy", type=bool, default=False, dest="rpy", help="if true we use rpy for rotations not quaternion")
+#parser.add_argument("-ath", type=bool, default=False, dest="add_thickness", help="wether or not to add branch thickness")
+#parser.add_argument("-nt", type=bool, default=False, dest="node_transform", help="wether or not we transform the graph to tree node representation") # if node transform should be performed
 
 args = parser.parse_args()
+
+profile = args.profile
+#profile choices:
+# 0: no graph alteration
+# 1: transform into node representation (graph nodes are tree points)
+# 2: transform into node representation with thickness parameter
+# 3: load as orientational representation
+# 4: load as orientational representation with rpy angles
+
+if profile == 1:
+    in_size = 6     # 3 positional 3 force
+    out_size = 3    # 3 positional
+elif profile == 2:
+    in_size = 7     # 3 positional 1 thickness 3 force
+    out_size = 3    # 3 positional
+elif profile == 3:
+    in_size = 11    # 3 positional 4 orientational 1 lenght 3 force
+    out_size = 4    # 4 orientational
+elif profile == 4:
+    in_size = 10    # 3 positional 3 orientational 1 lenght 3 force
+    out_size = 3    # 3 orientational
+elif profile == 0:
+    in_size = 10    # 3 positional 4 orientational 3 force
+    out_size = 3    # 3 positional
+
+
 
 print("[%s] setting up result path"%datetime.datetime.now())
 results_path = "../../results%s"%args.id
@@ -908,7 +1174,7 @@ wandb.init(project="gcn-tree-deformation")
 wandb.config = {
   "GCN Layers": args.graph_nodes,
   "Epochs": args.n_epochs,
-  "Treepoint Nodes": args.node_transform,
+  "Profile": profile,
   "Scheduler Patience": args.sched_patience,
   "Batch Size": args.batch_size,
   "Initial learning rate": args.learn_rate
@@ -917,30 +1183,58 @@ print("[%s] done"%datetime.datetime.now())
 
 # Loading Datase
 print("[%s] loading data"%datetime.datetime.now())
-d = args.file_directory 
+d = DATASET_DIR
+if args.file_directory is not None:
+    d = args.file_directory 
 
 dataset = []
 for tree in range(0, TREE_NUM):
     X_force_list = []
     X_pos_list = []
     Y_pos_list = []
-    X_edges, X_force, X_pos, Y_pos = load_npy(d, tree)
+    ori = profile == 3 or profile == 4
+    X_edges, X_force, X_pos, Y_pos = load_npy(d, tree, ori)
     X_force_list.append(X_force)
     X_pos_list.append(X_pos)
     Y_pos_list.append(Y_pos)
     X_force_arr = np.concatenate(X_force_list)
     X_pos_arr = np.concatenate(X_pos_list)
     Y_pos_arr = np.concatenate(Y_pos_list)
-    dataset_tree = make_dataset(X_edges, X_force_arr, X_pos_arr, Y_pos_arr, 
-                                make_directed=True, prune_augmented=False, rotate_augmented=False, just_tree_points=args.node_transform, add_thickness_bool=args.add_thickness, add_shortcuts_bool=args.add_shortcuts)
+    dataset_tree = make_dataset(X_edges, X_force_arr, X_pos_arr, Y_pos_arr, profile=profile, make_directed=True, prune_augmented=False, rotate_augmented=False)
     dataset = dataset + dataset_tree
 print("[%s] done"%datetime.datetime.now())
-
 print("[%s] generating dataset metrics"%datetime.datetime.now())
 get_dataset_metrics(dataset)
 #print(np.shape(dataset))
 # Shuffle Dataset
 #X_force_arr, X_pos_arr, Y_pos_arr = shuffle_in_unison(X_force_arr, X_pos_arr, Y_pos_arr)
+print("[%s] done"%datetime.datetime.now())
+
+print("[%s] printing example trees"%datetime.datetime.now())
+#i = 53
+for _ in range(10):
+    i = random.randint(0, len(dataset))
+    print("shown tree index: %s"%i)
+    if profile==3 or profile==4:
+        ori_end = 3+out_size
+        rpy = profile==4
+        X = reconstruct_positional_data(dataset[i].x[:,3:ori_end], dataset[i].edge_index, dataset[i].x, rpy=rpy)
+        Y = reconstruct_positional_data(dataset[i].y[:,3:ori_end], dataset[i].edge_index, dataset[i].x, rpy=rpy)
+    else:
+        X = dataset[i].x[:,:3]
+        Y = dataset[i].y[:,:3]
+    #print(val_dataset[i].y[:,:3])
+    force_node = dataset[i].force_node
+    #print(force_node)
+    print_edges = dataset[i].edge_index
+    #print(edge_index)
+    force = dataset[i].x[:,-3:]
+    #visualize_graph(X, val_dataset[i].x[:,:3], X, print_edges, force_node, force, results_path+"comp_with_self_x%s"%i)
+    #visualize_graph(Y, val_dataset[i].y[:,:3], Y, print_edges, force_node, force, results_path+"comp_with_self_y%s"%i)
+    visualize_graph(X, Y, X, print_edges, force_node, force, results_path+"example_push%s"%i)
+
+fig = plt.figure()
+ax = fig.add_subplot(111)
 print("[%s] done"%datetime.datetime.now())
 
 print("[%s] preparing dataset"%datetime.datetime.now())
@@ -951,6 +1245,10 @@ train_val_split = int(len(dataset)*0.9)
 
 train_dataset = dataset[:train_val_split]
 val_dataset = dataset[train_val_split:]
+
+test_val_split = int(len(val_dataset))
+test_dataset = dataset[:300]
+
 #X_force_train = X_force_arr[:train_val_split] 
 #X_pos_train = X_pos_arr[:train_val_split] 
 #Y_pos_train = Y_pos_arr[:train_val_split] 
@@ -972,7 +1270,7 @@ val_dataset = dataset[train_val_split:]
 batch_size=args.batch_size
 train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
 val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
-test_loader = DataLoader(val_dataset, batch_size=1, shuffle=True)
+test_loader = DataLoader(test_dataset, batch_size=1, shuffle=True)
 
 print("[%s] done"%datetime.datetime.now())
 #check train dataset?
@@ -988,23 +1286,6 @@ print("[%s] done"%datetime.datetime.now())
     #print(batch)
     #print('Number of graphs in batch: ', batch.num_graphs) 
 
-print("[%s] printing example trees"%datetime.datetime.now())
-for i in range(10):
-    X = val_dataset[i].x[:,:3]
-    #print(val_dataset[i].x[:,:3])
-    Y = val_dataset[i].y[:,:3]
-    #print(val_dataset[i].y[:,:3])
-    force_node = val_dataset[i].force_node
-    #print(force_node)
-    print_edges = val_dataset[i].edge_index
-    #print(edge_index)
-    force = val_dataset[i].x[:,-3:]
-    visualize_graph(X, Y, X, print_edges, force_node, force, results_path+"example_push%s"%i)
-
-fig = plt.figure()
-ax = fig.add_subplot(111)
-print("[%s] done"%datetime.datetime.now())
-
 # Setup GCN
 print("[%s] setting up GCN"%datetime.datetime.now())
 if args.cuda is not None:
@@ -1014,63 +1295,68 @@ else:
 if not torch.cuda.is_available():
     print("running on CPU")
 
-if args.node_transform:
-    in_size = 7
-    out_size = 3
-else:
-    in_size = 7
-    out_size = 6
-
 model = FGCN(args.graph_nodes, in_size, out_size).to(device)
-#print(model)
+if args.weights is None:
 
-optimizer = torch.optim.Adam(model.parameters(), lr=args.learn_rate)
-criterion = torch.nn.MSELoss()
-#criterion = torch.nn.L1Loss()
-scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min', patience=args.sched_patience, factor=0.5, min_lr=5e-4)
-print("[%s] done"%datetime.datetime.now())
+    optimizer = torch.optim.Adam(model.parameters(), lr=args.learn_rate)
+    if profile == 3 or profile == 4:
+        criterion = torch.nn.L1Loss()
+    else:
+        criterion = torch.nn.MSELoss()
 
-print("[%s] Training"%datetime.datetime.now())
-# Train and validate model
-train_loss_history = []
-val_loss_history = []
-base_loss_history = []
-best_loss = 1e9
-for epoch in range(1, args.n_epochs):
-    train_loss = train(model, optimizer, criterion, train_loader, epoch, device) #train model
-    val_loss, baseline_loss = validate(model, criterion, val_loader, epoch, device) # validate model
-    if val_loss<best_loss:
-        best_loss=val_loss
-        best_model = copy.deepcopy(model)
-    scheduler.step(best_loss)
-    train_loss_history.append(train_loss)
-    val_loss_history.append(val_loss)
-    base_loss_history.append(baseline_loss)
-    if epoch%10==0:
-        print(scheduler._last_lr)
-    if epoch%20==0:
-        torch.save(best_model.state_dict(), results_path+'model_epoch%s.pt'%epoch)
-    
-    # log with wandb
-    wandb.log({"training loss": train_loss, "validation loss": val_loss, "baseline_loss": baseline_loss, "epoch": epoch, "learning rate": scheduler._last_lr[0]})
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min', patience=args.sched_patience, factor=0.5, min_lr=5e-4)
+    print("[%s] done"%datetime.datetime.now())
 
-    ax.clear()
-    ax.plot(train_loss_history, 'r', label='train')
-    ax.plot(val_loss_history, 'b', label='validation')
-    ax.plot(base_loss_history, 'g', label='baseline loss')
-    ax.legend(loc="upper right")
-    ax.set_ylim([0, 0.2])
-    display(fig)
-    clear_output(wait=True)
-    print("[%s] epoch %s"%(datetime.datetime.now(), epoch))
+    print("[%s] Training"%datetime.datetime.now())
+    # Train and validate model
+    train_loss_history = []
+    val_loss_history = []
+    base_loss_history = []
+    best_loss = 1e9
+    for epoch in range(1, args.n_epochs+1):
+        train_loss = train(model, optimizer, criterion, train_loader, epoch, device, out_size=out_size, profile=profile) #train model
+        val_loss, baseline_loss = validate(model, criterion, val_loader, epoch, device, out_size=out_size, profile=profile) # validate model
 
-print("[%s] done"%datetime.datetime.now())
-#device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-#best_model = GCN().to(device)
-#best_model.load_state_dict(torch.load('model_173_seed0.pt'))
+        if val_loss < best_loss:
+            best_loss=val_loss
+            best_model = copy.deepcopy(model)
 
-torch.save(best_model.state_dict(), results_path+'model.pt')
+        scheduler.step(best_loss)
+        train_loss_history.append(train_loss)
+        val_loss_history.append(val_loss)
+        base_loss_history.append(baseline_loss)
+        if epoch%10==0:
+            print(scheduler._last_lr)
+        if epoch%20==0:
+            torch.save(best_model.state_dict(), results_path+'model_epoch%s.pt'%epoch)
+        
+        # log with wandb
+        wandb.log({"training loss": train_loss, "validation loss": val_loss, "baseline_loss": baseline_loss, "epoch": epoch, "learning rate": scheduler._last_lr[0]})
 
-# evaluate best model and save the state dict
-best_model.eval()
-test(best_model, test_loader, device)
+        ax.clear()
+        ax.plot(train_loss_history, 'r', label='train')
+        ax.plot(val_loss_history, 'b', label='validation')
+        ax.plot(base_loss_history, 'g', label='baseline loss')
+        ax.legend(loc="upper right")
+        ax.set_ylim([0, 0.2])
+        display(fig)
+        clear_output(wait=True)
+        print("[%s] epoch %s"%(datetime.datetime.now(), epoch))
+
+    print("[%s] done"%datetime.datetime.now())
+    #device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    #best_model = GCN().to(device)
+    #best_model.load_state_dict(torch.load('model_173_seed0.pt'))
+
+    torch.save(best_model.state_dict(), results_path+'model.pt')
+
+    # evaluate best model and save the state dict
+    best_model.eval()
+    test(best_model, test_loader, device, out_size=out_size, profile=profile)
+else:
+    print("[%s] Loading weights"%datetime.datetime.now())
+    model.load_state_dict(torch.load(args.weights, map_location=device))
+    print("[%s] weights loaded"%datetime.datetime.now())
+    print("[%s] testing"%datetime.datetime.now())
+    test(model, test_loader, device, out_size=out_size, profile=profile)
+    print("[%s] done"%datetime.datetime.now())
