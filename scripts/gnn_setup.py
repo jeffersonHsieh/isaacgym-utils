@@ -23,7 +23,7 @@ import datetime
 from torch.autograd import Variable
 
 DATASET_DIR = "/mnt/hdd/jan-malte/8Nodes_new_by_tree/"
-TREE_NUM = 5
+TREE_NUM = 6
 N_GRAPH_NODES = 8
 N_EPOCHS = 10
 NODE_TRANSFORM = True
