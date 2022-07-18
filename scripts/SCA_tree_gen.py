@@ -11,7 +11,7 @@ import yaml
 BATCH_SIZE = 1
 STIFFNESS_BASE = 11000
 SIMULATION_STEP_SIZE = 0.01
-GUI_ON = 1
+GUI_ON = 0
 
 def sphere(pt, a=1.0, b=1.0, c=1.0):
     r = (pt[0]-0.5)**2*a + (pt[1]-0.5)**2*b + (pt[2]-0.5)**2*c

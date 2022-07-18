@@ -23,7 +23,7 @@ import datetime
 from torch.autograd import Variable
 
 DATASET_DIR = "/mnt/hdd/jan-malte/8Nodes_new_by_tree/"
-TREE_NUM = 6
+TREE_NUM = 11
 N_GRAPH_NODES = 8
 N_EPOCHS = 10
 NODE_TRANSFORM = True
@@ -369,6 +369,7 @@ def test(model, test_loader, device, profile, out_size):
     l2_base = running_l2_norm_base/num_graphs
     print('Average node distance error: {}'.format(l2_norm))
     print('Average base node displacement: {}'.format(l2_base))
+    return l2_norm, l2_base
 
 def visualize_graph(X, Y, X_0, edge_index, force_node, force, name):
     force = force.detach().cpu().numpy()
@@ -1247,7 +1248,7 @@ train_dataset = dataset[:train_val_split]
 val_dataset = dataset[train_val_split:]
 
 test_val_split = int(len(val_dataset))
-test_dataset = dataset[:300]
+test_dataset = dataset[:2000]
 
 #X_force_train = X_force_arr[:train_val_split] 
 #X_pos_train = X_pos_arr[:train_val_split] 

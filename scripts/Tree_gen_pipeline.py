@@ -4,9 +4,9 @@ import multiprocessing
 import SCA_tree_gen as sca
 import franka_import_tree_multi_env as fit
 
-TREE_NUM = 100
-ENV_NUM = 1
-MAX_TREE_POINTS = 15
+TREE_NUM = 10
+ENV_NUM = 100
+MAX_TREE_POINTS = 10
 TRUNK_HEIGHT_FACTORS = [1,2]
 SCALING = 2
 PIPE_MODEL_EXPONENT = 3 #suggested values: 2 or 3

@@ -1,10 +1,10 @@
 import numpy as np
 
-TREE_NUM = 37
+TREE_NUM = 12
 ENV_NUM = 100
 PER_TREE = True
-GET_PATH = "/mnt/hdd/jan-malte/15Nodes_Large/"
-PUT_PATH = "/mnt/hdd/jan-malte/15Nodes_Large_by_tree/"
+GET_PATH = "/mnt/hdd/jan-malte/8Nodes_new/"
+PUT_PATH = "/mnt/hdd/jan-malte/8Nodes_new_by_tree/"
 TREE_START = 0
 
 y_vert_arrays = []
@@ -28,7 +28,7 @@ for tree in range(TREE_START, TREE_NUM):
         #print(np.shape(np.load('X_vertex_init_pose_tree%s_env%s.npy'%(tree, env))))
         #print(np.shape(np.load('X_force_applied_tree%s_env%s.npy'%(tree, env))))
         #print(np.shape(np.load('Y_vertex_final_pos_tree%s_env%s.npy'%(tree, env))))
-        x_vert_arrays.append(np.load(GET_PATH + 'X_vertex_init_pose_tree%s_env%s.npy'%(tree, env)))
+        x_vert_arrays.append(np.load(GET_PATH + 'X_vertex_init_pos_tree%s_env%s.npy'%(tree, env)))
         force_applied_arrays.append(np.load(GET_PATH + 'X_force_applied_tree%s_env%s.npy'%(tree, env)))
         y_vert_arrays.append(np.load(GET_PATH + 'Y_vertex_final_pos_tree%s_env%s.npy'%(tree, env)))
 
