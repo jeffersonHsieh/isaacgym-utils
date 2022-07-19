@@ -29,6 +29,7 @@ N_EPOCHS = 10
 NODE_TRANSFORM = True
 SCHED_PATIENCE = 10
 TIP_THICKNESS = 0.01
+TREE_PTS = 8
 
 
 #seed = 0
@@ -152,6 +153,29 @@ class GCN(torch.nn.Module):
         x = self.out(x)        
         return x
 
+class QuatLoss(torch.nn.Module):
+    def __init__(self):
+        super().__init__()
+        #self.mse = torch.nn.MSELoss()
+    
+    def forward(self, quat_pred, quat_true):
+        batch_size = len(quat_pred)
+
+        ## Normalization
+        divisor = torch.norm(quat_pred, dim=1)
+        quat_pred = torch.transpose(quat_pred, 0, 1)
+        norm_pred = torch.div(quat_pred, divisor)
+        norm_pred = torch.transpose(norm_pred, 0, 1)
+
+        ## loss calc
+        dots = torch.bmm(norm_pred.view(batch_size, 1, 4), quat_true.view(batch_size, 4, 1))
+        square_dots = torch.square(dots.view(batch_size))
+        losses = torch.sub(torch.ones(batch_size).to(device), square_dots)
+
+        loss = torch.sum(losses)/len(losses)
+        return loss
+
+
 ######## NETWORK DEF END ########         
 ##### FUNCTION DEF START #####
 
@@ -179,7 +203,7 @@ def train(model, optimizer, criterion, train_loader, epoch, device, out_size, pr
         optimizer.zero_grad()
         batch.to(device)
         out = model(batch)
-        if profile == 3 or profile == 4: # if we learn orientation
+        if profile == 3 or profile == 4 or profile == 5: # if we learn orientation
             out_end = 3 + out_size
             loss = criterion(out[:,:], batch.y[:,3:out_end]) # assumes that xyz are the first 3 dimensions of y
         else:
@@ -233,7 +257,7 @@ def validate(model, criterion, val_loader, epoch, device, profile, out_size):
             x_shape = np.shape(x_tree_array)
             pred_shape = np.shape(pred_array)
 
-            if profile == 3 or profile == 4:
+            if profile == 3 or profile == 4 or profile == 5:
                 y_tree_array = np.reshape(y_tree_array, (batch.num_graphs,int(len(batch.y)/batch.num_graphs), y_shape[1])) 
                 x_tree_array = np.reshape(x_tree_array, (batch.num_graphs,int(len(batch.y)/batch.num_graphs), x_shape[1])) 
                 pred_array = np.reshape(pred_array, (batch.num_graphs,int(len(batch.y)/batch.num_graphs), pred_shape[1]))
@@ -241,8 +265,8 @@ def validate(model, criterion, val_loader, epoch, device, profile, out_size):
                 base_loss_by_tree = []
                 val_loss_by_tree = []
                 for tree_idx in range(0,len(y_tree_array)):
-                    base_loss_by_tree.append(criterion(torch.tensor(x_tree_array[tree_idx,:,3:ori_end]), torch.tensor(y_tree_array[tree_idx,:,3:ori_end]))) 
-                    val_loss_by_tree.append(criterion(torch.tensor(pred_array[tree_idx]), torch.tensor(y_tree_array[tree_idx,:,3:ori_end])))
+                    base_loss_by_tree.append(criterion(torch.tensor(x_tree_array[tree_idx,:,3:ori_end]).to(device), torch.tensor(y_tree_array[tree_idx,:,3:ori_end]).to(device))) 
+                    val_loss_by_tree.append(criterion(torch.tensor(pred_array[tree_idx]).to(device), torch.tensor(y_tree_array[tree_idx,:,3:ori_end]).to(device)))
                 base_loss_by_tree = torch.tensor(base_loss_by_tree)
                 val_loss_by_tree = torch.tensor(val_loss_by_tree)
             else:
@@ -256,7 +280,7 @@ def validate(model, criterion, val_loader, epoch, device, profile, out_size):
             base_loss_by_tree_list = base_loss_by_tree_list + base_loss_by_tree.tolist()
             val_loss_by_tree_list = val_loss_by_tree_list + val_loss_by_tree.tolist()
 
-        if profile == 3 or profile == 4:
+        if profile == 3 or profile == 4 or profile == 5:
             running_l2_norm += criterion(out[:,:], batch.y[:,3:ori_end]).item()
             running_l2_norm_base += criterion(batch.x[:,3:ori_end], batch.y[:,3:ori_end]).item()   
         else:
@@ -269,7 +293,7 @@ def validate(model, criterion, val_loader, epoch, device, profile, out_size):
         print_loss_by_tree(base_loss_by_tree_list, val_loss_by_tree_list, epoch)
 
     # average the loss functions  
-    if profile == 3 or profile == 4:
+    if profile == 3 or profile == 4 or profile == 5:
         val_loss = running_l2_norm/len(val_loader)
         base_loss = running_l2_norm_base/len(val_loader)
     else:
@@ -346,7 +370,7 @@ def test(model, test_loader, device, profile, out_size):
         y = batch.y
         x = batch.x
         force = batch.x[:,-3:]
-        if profile==3 or profile==4:
+        if profile==3 or profile==4 or profile==5:
             roty = batch.y.detach().cpu().numpy()[:,3:ori_end]
             rotx = batch.x.detach().cpu().numpy()[:,3:ori_end]
 
@@ -775,14 +799,14 @@ def rotate_augment(X_edges, X_force, X_pos, Y_pos, rotate_augment_factor=5, stdd
             
     return new_X_edges, new_X_force, new_X_pos, new_Y_pos
 
-def load_npy(data_dir, tree_num, orientational):
+def load_npy(data_dir, tree_num, orientational, prefix):
     # Load npy files from dataset_dir. A shortcut to 'sample_1_push' shared folder has been added to 'My Drive' 
     if orientational:
-        X_stiffness_damping = np.load(os.path.join(data_dir, 'X_coeff_stiff_damp_tree%s.npy'%tree_num))
-        X_edges = np.load(os.path.join(data_dir, 'X_edge_def_tree%s_ori.npy'%tree_num))
-        X_force = np.load(os.path.join(data_dir, 'X_force_applied_tree%s_ori.npy'%tree_num))
-        X_pos = np.load(os.path.join(data_dir, 'X_vertex_init_tree%s_ori.npy'%tree_num))
-        Y_pos = np.load(os.path.join(data_dir, 'Y_vertex_final_tree%s_ori.npy'%tree_num))
+        X_stiffness_damping = np.load(os.path.join(data_dir, prefix + 'X_coeff_stiff_damp_tree%s.npy'%tree_num))
+        X_edges = np.load(os.path.join(data_dir, prefix + 'X_edge_def_tree%s_ori.npy'%tree_num))
+        X_force = np.load(os.path.join(data_dir, prefix + 'X_force_applied_tree%s_ori.npy'%tree_num))
+        X_pos = np.load(os.path.join(data_dir, prefix + 'X_vertex_init_tree%s_ori.npy'%tree_num))
+        Y_pos = np.load(os.path.join(data_dir, prefix + 'Y_vertex_final_tree%s_ori.npy'%tree_num))
     else:
         #X_stiffness_damping = np.load(os.path.join(data_dir, 'X_coeff_stiff_damp_tree%s.npy'%tree_num))
         #X_edges = np.load(os.path.join(data_dir, 'X_edge_def_tree%s.npy'%tree_num))
@@ -790,11 +814,11 @@ def load_npy(data_dir, tree_num, orientational):
         #X_pos = np.load(os.path.join(data_dir, 'X_vertex_init_tree%s_clean.npy'%tree_num))
         #Y_pos = np.load(os.path.join(data_dir, 'Y_vertex_final_tree%s_clean.npy'%tree_num))
 
-        X_stiffness_damping = np.load(os.path.join(data_dir, 'X_coeff_stiff_damp_tree%s.npy'%tree_num))
-        X_edges = np.load(os.path.join(data_dir, 'X_edge_def_tree%s.npy'%tree_num))
-        X_force = np.load(os.path.join(data_dir, 'X_force_applied_tree%s.npy'%tree_num))
-        X_pos = np.load(os.path.join(data_dir, 'X_vertex_init_pose_tree%s.npy'%tree_num))
-        Y_pos = np.load(os.path.join(data_dir, 'Y_vertex_final_pos_tree%s.npy'%tree_num))
+        X_stiffness_damping = np.load(os.path.join(data_dir, prefix + 'X_coeff_stiff_damp_tree%s.npy'%tree_num))
+        X_edges = np.load(os.path.join(data_dir, prefix + 'X_edge_def_tree%s.npy'%tree_num))
+        X_force = np.load(os.path.join(data_dir, prefix + 'X_force_applied_tree%s.npy'%tree_num))
+        X_pos = np.load(os.path.join(data_dir, prefix + 'X_vertex_init_pose_tree%s.npy'%tree_num))
+        Y_pos = np.load(os.path.join(data_dir, prefix + 'Y_vertex_final_pos_tree%s.npy'%tree_num))
 
         # Truncate node orientations and tranpose to shape (num_graphs, num_nodes, 3)
         X_pos = X_pos[:, :7, :].transpose((0,2,1))
@@ -1052,6 +1076,10 @@ def rot_to_rpy(X_pos, Y_pos):
 def make_dataset(X_edges, X_force, X_pos, Y_pos, profile,
                  make_directed=True, prune_augmented=False, rotate_augmented=False): # CALLED PER TREE
     num_graphs = len(X_pos)
+    
+    if rotate_augmented:
+        X_edges, X_force, X_pos, Y_pos = rotate_augment(X_edges, X_force, X_pos, Y_pos)
+    
     if profile == 1 or profile == 2:
         X_edges, X_pos, Y_pos, X_force = remove_duplicate_nodes(X_edges, X_pos, Y_pos, X_force)
         if profile == 2:
@@ -1062,9 +1090,6 @@ def make_dataset(X_edges, X_force, X_pos, Y_pos, profile,
     X_edges, X_force, X_pos, Y_pos = make_directed_and_prune_augment(X_edges, X_force, X_pos, Y_pos,
                                                                      make_directed=make_directed, 
                                                                      prune_augmented=prune_augmented)
-
-    if rotate_augmented:
-        X_edges, X_force, X_pos, Y_pos = rotate_augment(X_edges, X_force, X_pos, Y_pos)
 
     num_graphs = len(X_pos)
     dataset = []
@@ -1130,7 +1155,7 @@ parser.add_argument("-ilr", type=float, default=2e-3, dest="learn_rate", help="i
 parser.add_argument("-cuda", type=int, dest="cuda", help="cuda gpu to run on")
 parser.add_argument("-weights", type=str, dest="weights", help="saved model weights to load")
 
-parser.add_argument("-profile", type=int, default=0, choices=[0,1,2,3,4], dest="profile")
+parser.add_argument("-profile", type=int, default=0, choices=[0,1,2,3,4,5], dest="profile")
 #parser.add_argument("-ori", type=bool, default=False, dest="orientational", help="wether or not we use directional mode (only predict directional information)")
 #parser.add_argument("-rpy", type=bool, default=False, dest="rpy", help="if true we use rpy for rotations not quaternion")
 #parser.add_argument("-ath", type=bool, default=False, dest="add_thickness", help="wether or not to add branch thickness")
@@ -1152,7 +1177,7 @@ if profile == 1:
 elif profile == 2:
     in_size = 7     # 3 positional 1 thickness 3 force
     out_size = 3    # 3 positional
-elif profile == 3:
+elif profile == 3 or profile == 5:
     in_size = 11    # 3 positional 4 orientational 1 lenght 3 force
     out_size = 4    # 4 orientational
 elif profile == 4:
@@ -1189,12 +1214,17 @@ if args.file_directory is not None:
     d = args.file_directory 
 
 dataset = []
+prefix = "[%s]"%TREE_PTS
+try:
+    checkload = np.load(d + prefix + 'X_coeff_stiff_damp_tree%s.npy'%0)) #assumes full dataset present (should be true anyways)
+except:
+    prefix = ""
 for tree in range(0, TREE_NUM):
     X_force_list = []
     X_pos_list = []
     Y_pos_list = []
-    ori = profile == 3 or profile == 4
-    X_edges, X_force, X_pos, Y_pos = load_npy(d, tree, ori)
+    ori = profile == 3 or profile == 4 or profile == 5
+    X_edges, X_force, X_pos, Y_pos = load_npy(d, tree, ori, prefix)
     X_force_list.append(X_force)
     X_pos_list.append(X_pos)
     Y_pos_list.append(Y_pos)
@@ -1216,7 +1246,7 @@ print("[%s] printing example trees"%datetime.datetime.now())
 for _ in range(10):
     i = random.randint(0, len(dataset))
     print("shown tree index: %s"%i)
-    if profile==3 or profile==4:
+    if profile==3 or profile==4 or profile==5:
         ori_end = 3+out_size
         rpy = profile==4
         X = reconstruct_positional_data(dataset[i].x[:,3:ori_end], dataset[i].edge_index, dataset[i].x, rpy=rpy)
@@ -1300,7 +1330,9 @@ model = FGCN(args.graph_nodes, in_size, out_size).to(device)
 if args.weights is None:
 
     optimizer = torch.optim.Adam(model.parameters(), lr=args.learn_rate)
-    if profile == 3 or profile == 4:
+    if profile == 5: 
+        criterion = QuatLoss()
+    elif profile == 4 or profile == 3:
         criterion = torch.nn.L1Loss()
     else:
         criterion = torch.nn.MSELoss()
