@@ -1216,7 +1216,7 @@ if args.file_directory is not None:
 dataset = []
 prefix = "[%s]"%TREE_PTS
 try:
-    checkload = np.load(d + prefix + 'X_coeff_stiff_damp_tree%s.npy'%0)) #assumes full dataset present (should be true anyways)
+    checkload = np.load(d + prefix + 'X_coeff_stiff_damp_tree%s.npy'%0) #assumes full dataset present (should be true anyways)
 except:
     prefix = ""
 for tree in range(0, TREE_NUM):
