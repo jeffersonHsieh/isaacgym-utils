@@ -21,9 +21,11 @@ import wandb
 import argparse
 import datetime
 from torch.autograd import Variable
+import math
 
 DATASET_DIR = "/mnt/hdd/jan-malte/8Nodes_new_by_tree/"
-TREE_NUM = 11
+TREE_NUM = 25
+TREE_START = 0
 N_GRAPH_NODES = 8
 N_EPOCHS = 10
 NODE_TRANSFORM = True
@@ -189,7 +191,50 @@ class Arrow3D(FancyArrowPatch):
         xs, ys, zs = proj3d.proj_transform(xs3d, ys3d, zs3d, self.axes.M)
         self.set_positions((xs[0],ys[0]),(xs[1],ys[1]))
 
-        return np.min(zs)
+        return np.min(zs)    
+
+class TreeTrunctuator():
+    def __init__(self, graph):
+        self.graph = graph
+        self.new_graph = self.generate_trunk_graph(graph)
+        self.index_translation_dict_to = {} # keys are initial indices, values are final indices
+        self.index_translation_dict_from = {} # keys are final indices, values are initial indices
+
+    def parents(node, edges):
+        parents = []
+        for parent, child in edges:
+            if child == node:
+                parents.append(parent)
+        return parents
+
+    def generate_trunk_graph(graph):
+        force_node = graph.force_node
+        X_vert = []
+        Y_vert = []
+        tmp_edges = []
+        edges = []
+        frontier = [force_node]
+        explored = []
+        while len(frontier) != 0:
+            current_node = frontier.pop()
+            parent = parents(current_node, graph.edges)[0] # should only have one parent, since only the trunk has two sided connections
+            current_idx = len(X_vert)
+
+            self.index_translation_dict_to[current_node] = current_idx
+            self.index_translation_dict_from[current_idx] = current_node
+            
+            X_vert.append(graph.x[current_node])
+            Y_vert.append(graph.y[current_node])
+
+            if parent is not None: # edges will need to be translated later
+                tmp_edges.append([parent, current_node])
+                tmp_edges.append([current_node, parent])
+                if parent not in explored:
+                    frontier.append(parent)
+        
+        for parent, child in tmp_edges: # translate edge dictionary
+            edges.append([self.index_translation_dict_to[parent], self.index_translation_dict_to[child]])
+
 
 # 0: no graph alteration
 # 1: transform into node representation (graph nodes are tree points)
@@ -307,8 +352,11 @@ def validate(model, criterion, val_loader, epoch, device, profile, out_size):
     return val_loss, base_loss
 
 def assign_position(node_index, original_tree, rotations, parent_pos, parent_rot, len_idx):
+    rotations = torch.Tensor(rotations)
     distance = original_tree[node_index][len_idx]
-    rot_mat = Rotation.from_quat(rotations[node_index]) * parent_rot
+    divisor = torch.norm(rotations[node_index], dim=0)
+    quat = torch.div(rotations[node_index], divisor)
+    rot_mat = Rotation.from_quat(quat) * parent_rot
     new_pos = parent_pos + rot_mat.as_matrix().dot(np.array([0,0,distance]))
     return new_pos, rot_mat
 
@@ -1098,8 +1146,8 @@ def make_dataset(X_edges, X_force, X_pos, Y_pos, profile,
         # stiffness damping is (4) because of bending stiffness/damping and torsional stiffness/damping
         root_feature = np.zeros((len(X_pos[i]), 1))
         #root_feature[0, 0] = 1.0
-        #X_data = np.concatenate((X_pos[i], X_force[i], root_feature), axis=1) # TODO: Add stiffness damping features later
-        X_data = np.concatenate((X_pos[i], X_force[i]), axis=1) # TODO: Add stiffness damping features later
+        #X_data = np.concatenate((X_pos[i], X_force[i], root_feature), axis=1)
+        X_data = np.concatenate((X_pos[i], X_force[i]), axis=1)
 
         edge_index = torch.tensor(X_edges[i].T, dtype=torch.long)
         x = torch.tensor(X_data, dtype=torch.float)
@@ -1154,6 +1202,7 @@ parser.add_argument("-btchs", type=int, default=256, dest="batch_size", help="ba
 parser.add_argument("-ilr", type=float, default=2e-3, dest="learn_rate", help="initial learning rate")
 parser.add_argument("-cuda", type=int, dest="cuda", help="cuda gpu to run on")
 parser.add_argument("-weights", type=str, dest="weights", help="saved model weights to load")
+parser.add_argument("-topbrk", type=bool, default=True, dest="topbrk", help="topology break: if on, the validation tree topologies will not be present in the train set")
 
 parser.add_argument("-profile", type=int, default=0, choices=[0,1,2,3,4,5], dest="profile")
 #parser.add_argument("-ori", type=bool, default=False, dest="orientational", help="wether or not we use directional mode (only predict directional information)")
@@ -1164,6 +1213,7 @@ parser.add_argument("-profile", type=int, default=0, choices=[0,1,2,3,4,5], dest
 args = parser.parse_args()
 
 profile = args.profile
+topology_break = args.topbrk
 #profile choices:
 # 0: no graph alteration
 # 1: transform into node representation (graph nodes are tree points)
@@ -1219,7 +1269,10 @@ try:
     checkload = np.load(d + prefix + 'X_coeff_stiff_damp_tree%s.npy'%0) #assumes full dataset present (should be true anyways)
 except:
     prefix = ""
-for tree in range(0, TREE_NUM):
+
+i = 0
+val_idx = 0
+for tree in range(TREE_START, TREE_NUM):
     X_force_list = []
     X_pos_list = []
     Y_pos_list = []
@@ -1232,6 +1285,9 @@ for tree in range(0, TREE_NUM):
     X_pos_arr = np.concatenate(X_pos_list)
     Y_pos_arr = np.concatenate(Y_pos_list)
     dataset_tree = make_dataset(X_edges, X_force_arr, X_pos_arr, Y_pos_arr, profile=profile, make_directed=True, prune_augmented=False, rotate_augmented=False)
+    if i == 3: #grab 3 trees (all pushes) for the validation set
+        val_idx = len(dataset)
+    i += 1
     dataset = dataset + dataset_tree
 print("[%s] done"%datetime.datetime.now())
 print("[%s] generating dataset metrics"%datetime.datetime.now())
@@ -1269,16 +1325,28 @@ ax = fig.add_subplot(111)
 print("[%s] done"%datetime.datetime.now())
 
 print("[%s] preparing dataset"%datetime.datetime.now())
-random.shuffle(dataset)
 
-# setup validation/test split
-train_val_split = int(len(dataset)*0.9)
+if topology_break:
+    print(val_idx)
+    train_dataset = dataset[val_idx:]
+    random.shuffle(train_dataset)
 
-train_dataset = dataset[:train_val_split]
-val_dataset = dataset[train_val_split:]
+    val_dataset = dataset[:val_idx]
+    random.shuffle(val_dataset)
 
-test_val_split = int(len(val_dataset))
-test_dataset = dataset[:2000]
+    test_dataset = val_dataset[:2000]
+else:
+    random.shuffle(dataset)
+
+    # setup validation/test split
+    train_val_split = int(len(dataset)*0.9)
+
+    train_dataset = dataset[:train_val_split]
+    val_dataset = dataset[train_val_split:]
+    
+    random.shuffle(val_dataset)
+    test_val_split = int(len(val_dataset))
+    test_dataset = val_dataset[:2000]
 
 #X_force_train = X_force_arr[:train_val_split] 
 #X_pos_train = X_pos_arr[:train_val_split] 

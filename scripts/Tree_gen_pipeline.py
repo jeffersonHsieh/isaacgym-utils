@@ -3,6 +3,7 @@ import random
 import multiprocessing
 import SCA_tree_gen as sca
 import franka_import_tree_multi_env as fit
+import argparse
 
 TREE_NUM = 100
 ENV_NUM = 100

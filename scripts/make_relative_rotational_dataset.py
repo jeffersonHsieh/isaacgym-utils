@@ -138,13 +138,21 @@ def adjust_indexing(tuple_list, deleted_index):
 
 GET_PATH = "/mnt/hdd/jan-malte/8Nodes_new_by_tree/"
 PUT_PATH = "/mnt/hdd/jan-malte/8Nodes_new_by_tree/"
-TREE_NUM = 12
+TREE_NUM = 26
+TREE_PTS = 8
+TREE_START = 20
 
-for tree in range(0, TREE_NUM):
-    X_edges = np.load(os.path.join(GET_PATH, 'X_edge_def_tree%s.npy'%tree))
-    force_applied_array = np.load(os.path.join(GET_PATH, 'X_force_applied_tree%s.npy'%tree))
-    x_vert_array = np.load(os.path.join(GET_PATH, 'X_vertex_init_pose_tree%s.npy'%tree))
-    y_vert_array = np.load(os.path.join(GET_PATH, 'Y_vertex_final_pos_tree%s.npy'%tree))
+for tree in range(TREE_START, TREE_NUM):
+    prefix = "[%s]"%TREE_PTS
+    try:
+        checkload = np.load(GET_PATH + prefix + 'X_coeff_stiff_damp_tree%s.npy'%(tree)) #assumes full dataset present (should be true anyways)
+    except:
+        prefix = ""
+
+    X_edges = np.load(os.path.join(GET_PATH, prefix + 'X_edge_def_tree%s.npy'%tree))
+    force_applied_array = np.load(os.path.join(GET_PATH, prefix + 'X_force_applied_tree%s.npy'%tree))
+    x_vert_array = np.load(os.path.join(GET_PATH, prefix + 'X_vertex_init_pose_tree%s.npy'%tree))
+    y_vert_array = np.load(os.path.join(GET_PATH, prefix + 'Y_vertex_final_pos_tree%s.npy'%tree))
 
     print("######################################")
 
@@ -173,7 +181,7 @@ for tree in range(0, TREE_NUM):
 
     print("######################################")
 
-    np.save(PUT_PATH + 'X_vertex_init_tree%s_ori'%tree, x_vert_array)
-    np.save(PUT_PATH + 'X_force_applied_tree%s_ori'%tree, force_applied_array )
-    np.save(PUT_PATH + 'Y_vertex_final_tree%s_ori'%tree, y_vert_array)
-    np.save(PUT_PATH + 'X_edge_def_tree%s_ori'%tree, X_edges)
+    np.save(PUT_PATH + prefix + 'X_vertex_init_tree%s_ori'%tree, x_vert_array)
+    np.save(PUT_PATH + prefix + 'X_force_applied_tree%s_ori'%tree, force_applied_array )
+    np.save(PUT_PATH + prefix + 'Y_vertex_final_tree%s_ori'%tree, y_vert_array)
+    np.save(PUT_PATH + prefix + 'X_edge_def_tree%s_ori'%tree, X_edges)
