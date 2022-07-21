@@ -67,9 +67,9 @@ class FGCNResidualBlock(torch.nn.Module):
         return x
 
 class FGCN(torch.nn.Module): 
-    def __init__(self, n_graph_nodes, in_size, out_size):
+    def __init__(self, n_graph_nodes, in_size, out_size, hidden_size=1280):
         super().__init__()
-        hidden_size = 1280 
+        #hidden_size = 1280 
         p = 0.4
         self.stem = torch.nn.Sequential(
             torch.nn.Linear(in_size, hidden_size),  
@@ -1203,6 +1203,7 @@ parser.add_argument("-ilr", type=float, default=2e-3, dest="learn_rate", help="i
 parser.add_argument("-cuda", type=int, dest="cuda", help="cuda gpu to run on")
 parser.add_argument("-weights", type=str, dest="weights", help="saved model weights to load")
 parser.add_argument("-topbrk", type=bool, default=True, dest="topbrk", help="topology break: if on, the validation tree topologies will not be present in the train set")
+parser.add_argument("-hidden_size", type=int, default=-1, dest="hidden_size", help="sets the hidden size of the network")
 
 parser.add_argument("-profile", type=int, default=0, choices=[0,1,2,3,4,5], dest="profile")
 #parser.add_argument("-ori", type=bool, default=False, dest="orientational", help="wether or not we use directional mode (only predict directional information)")
@@ -1394,9 +1395,11 @@ else:
 if not torch.cuda.is_available():
     print("running on CPU")
 
-model = FGCN(args.graph_nodes, in_size, out_size).to(device)
+if args.hidden_size != -1:
+    model = FGCN(args.graph_nodes, in_size, out_size, args.hidden_size).to(device)
+else:
+    model = FGCN(args.graph_nodes, in_size, out_size).to(device)
 if args.weights is None:
-
     optimizer = torch.optim.Adam(model.parameters(), lr=args.learn_rate)
     if profile == 5: 
         criterion = QuatLoss()
