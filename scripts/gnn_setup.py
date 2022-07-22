@@ -23,16 +23,15 @@ import datetime
 from torch.autograd import Variable
 import math
 
-DATASET_DIR = "/mnt/hdd/jan-malte/8Nodes_new_by_tree/"
+DATASET_DIR = "/mnt/hdd/jan-malte/mixed_dataset/"
 TREE_NUM = 25
 TREE_START = 0
-N_GRAPH_NODES = 8
+N_GRAPH_NODES = 10
 N_EPOCHS = 10
 NODE_TRANSFORM = True
 SCHED_PATIENCE = 10
 TIP_THICKNESS = 0.01
-TREE_PTS = 8
-
+TREE_PTS = [8,10]
 
 #seed = 0
 #np.random.seed(seed)
@@ -1195,7 +1194,7 @@ def get_dataset_metrics(dataset):
 parser = argparse.ArgumentParser()
 parser.add_argument("-dir", type=str, dest="file_directory", help="directory in which the dataset files are located")
 parser.add_argument("-id", type=str, dest="id", help="id to identify the results folder")
-parser.add_argument("-gn", type=int, default=8, dest="graph_nodes", help="number of layers the GCN will have") #number of graph nodes
+parser.add_argument("-gn", type=int, default=10, dest="graph_nodes", help="number of layers the GCN will have") #number of graph nodes
 parser.add_argument("-ep", type=int, default=500, dest="n_epochs", help="number of epochs to run") # number of epochs
 parser.add_argument("-pat", type=int, default=50, dest="sched_patience", help="patience of the scheduler") #patience of scheduler
 parser.add_argument("-btchs", type=int, default=256, dest="batch_size", help="batch size")
@@ -1264,32 +1263,41 @@ d = DATASET_DIR
 if args.file_directory is not None:
     d = args.file_directory 
 
-dataset = []
-prefix = "[%s]"%TREE_PTS
-try:
-    checkload = np.load(d + prefix + 'X_coeff_stiff_damp_tree%s.npy'%0) #assumes full dataset present (should be true anyways)
-except:
-    prefix = ""
+for tree_pt in TREE_PTS:
+    dataset = []
+    prefix = "[%s]"%tree_pt
+    try:
+        checkload = np.load(d + prefix + 'X_coeff_stiff_damp_tree%s.npy'%0) #assumes full dataset present (should be true anyways)
+    except:
+        prefix = ""
 
-i = 0
-val_idx = 0
-for tree in range(TREE_START, TREE_NUM):
-    X_force_list = []
-    X_pos_list = []
-    Y_pos_list = []
-    ori = profile == 3 or profile == 4 or profile == 5
-    X_edges, X_force, X_pos, Y_pos = load_npy(d, tree, ori, prefix)
-    X_force_list.append(X_force)
-    X_pos_list.append(X_pos)
-    Y_pos_list.append(Y_pos)
-    X_force_arr = np.concatenate(X_force_list)
-    X_pos_arr = np.concatenate(X_pos_list)
-    Y_pos_arr = np.concatenate(Y_pos_list)
-    dataset_tree = make_dataset(X_edges, X_force_arr, X_pos_arr, Y_pos_arr, profile=profile, make_directed=True, prune_augmented=False, rotate_augmented=False)
-    if i == 3: #grab 3 trees (all pushes) for the validation set
-        val_idx = len(dataset)
-    i += 1
-    dataset = dataset + dataset_tree
+    i = 0
+    val_idx = 0
+    tree = 0
+    if profile == 3 or profile == 4 or profile == 5:
+        suffix = "_ori.npy"
+        l_path = os.path.join(d, prefix + 'X_edge_def_tree%s'%0 + suffix)
+    else:
+        suffix = ".npy"
+        l_path = os.path.join(d, prefix + 'X_edge_def_tree%s'%0 + suffix)
+    while os.path.exists((d + prefix + 'X_edge_def_tree%s'%tree + suffix)):
+        X_force_list = []
+        X_pos_list = []
+        Y_pos_list = []
+        ori = profile == 3 or profile == 4 or profile == 5
+        X_edges, X_force, X_pos, Y_pos = load_npy(d, tree, ori, prefix)
+        X_force_list.append(X_force)
+        X_pos_list.append(X_pos)
+        Y_pos_list.append(Y_pos)
+        X_force_arr = np.concatenate(X_force_list)
+        X_pos_arr = np.concatenate(X_pos_list)
+        Y_pos_arr = np.concatenate(Y_pos_list)
+        dataset_tree = make_dataset(X_edges, X_force_arr, X_pos_arr, Y_pos_arr, profile=profile, make_directed=True, prune_augmented=False, rotate_augmented=False)
+        if i == 3: #grab 3 trees (all pushes) for the validation set
+            val_idx = len(dataset)
+        i += 1
+        tree += 1
+        dataset = dataset + dataset_tree
 print("[%s] done"%datetime.datetime.now())
 print("[%s] generating dataset metrics"%datetime.datetime.now())
 get_dataset_metrics(dataset)
@@ -1309,6 +1317,8 @@ for _ in range(10):
         X = reconstruct_positional_data(dataset[i].x[:,3:ori_end], dataset[i].edge_index, dataset[i].x, rpy=rpy)
         Y = reconstruct_positional_data(dataset[i].y[:,3:ori_end], dataset[i].edge_index, dataset[i].x, rpy=rpy)
     else:
+        print(np.around(dataset[i].x[:,3:7], 2))
+        print(np.around(dataset[i].y[:,3:7], 2))
         X = dataset[i].x[:,:3]
         Y = dataset[i].y[:,:3]
     #print(val_dataset[i].y[:,:3])

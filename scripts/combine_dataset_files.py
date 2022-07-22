@@ -1,12 +1,12 @@
 import numpy as np
 
-TREE_NUM = 26
-TREE_PTS = 8
+TREE_NUM = 11
+TREE_PTS = 10
 ENV_NUM = 100
 PER_TREE = True
-GET_PATH = "/mnt/hdd/jan-malte/8Nodes_new/"
-PUT_PATH = "/mnt/hdd/jan-malte/8Nodes_new_by_tree/"
-TREE_START = 20
+GET_PATH = "/mnt/hdd/jan-malte/10Nodes_new/"
+PUT_PATH = "/mnt/hdd/jan-malte/10Nodes_new_by_tree/"
+TREE_START = 0
 
 y_vert_arrays = []
 x_vert_arrays = []
