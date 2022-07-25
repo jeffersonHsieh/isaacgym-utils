@@ -23,10 +23,10 @@ import datetime
 from torch.autograd import Variable
 import math
 
-DATASET_DIR = "/mnt/hdd/jan-malte/mixed_dataset/"
+DATASET_DIR = "/mnt/hdd/jan-malte/8Nodes_new_by_tree/"
 TREE_NUM = 25
 TREE_START = 0
-N_GRAPH_NODES = 10
+N_GRAPH_NODES = 8
 N_EPOCHS = 10
 NODE_TRANSFORM = True
 SCHED_PATIENCE = 10
@@ -1265,8 +1265,8 @@ d = DATASET_DIR
 if args.file_directory is not None:
     d = args.file_directory 
 
+dataset = []
 for tree_pt in TREE_PTS:
-    dataset = []
     prefix = "[%s]"%tree_pt
     try:
         checkload = np.load(d + prefix + 'X_coeff_stiff_damp_tree%s.npy'%0) #assumes full dataset present (should be true anyways)
@@ -1300,10 +1300,10 @@ for tree_pt in TREE_PTS:
         i += 1
         tree += 1
         dataset = dataset + dataset_tree
+
 print("[%s] done"%datetime.datetime.now())
 print("[%s] generating dataset metrics"%datetime.datetime.now())
 get_dataset_metrics(dataset)
-#print(np.shape(dataset))
 # Shuffle Dataset
 #X_force_arr, X_pos_arr, Y_pos_arr = shuffle_in_unison(X_force_arr, X_pos_arr, Y_pos_arr)
 print("[%s] done"%datetime.datetime.now())
@@ -1312,6 +1312,8 @@ print("[%s] printing example trees"%datetime.datetime.now())
 #i = 53
 for _ in range(10):
     i = random.randint(0, len(dataset))
+    print(len(dataset))
+    print(i)
     print("shown tree index: %s"%i)
     if profile==3 or profile==4 or profile==5:
         ori_end = 3+out_size
