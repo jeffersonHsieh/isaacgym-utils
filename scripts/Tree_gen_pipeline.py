@@ -7,7 +7,7 @@ import argparse
 
 TREE_NUM = 100
 ENV_NUM = 100
-MAX_TREE_POINTS = 10
+MAX_TREE_POINTS = 12
 TRUNK_HEIGHT_FACTORS = [1,2]
 SCALING = 2
 PIPE_MODEL_EXPONENT = 3 #suggested values: 2 or 3

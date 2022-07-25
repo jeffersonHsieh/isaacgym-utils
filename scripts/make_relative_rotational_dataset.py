@@ -138,9 +138,9 @@ def adjust_indexing(tuple_list, deleted_index):
 
 GET_PATH = "/mnt/hdd/jan-malte/10Nodes_new_by_tree/"
 PUT_PATH = "/mnt/hdd/jan-malte/10Nodes_new_by_tree/"
-TREE_NUM = 11
+TREE_NUM = 24
 TREE_PTS = 10
-TREE_START = 0
+TREE_START = 11
 
 for tree in range(TREE_START, TREE_NUM):
     prefix = "[%s]"%TREE_PTS

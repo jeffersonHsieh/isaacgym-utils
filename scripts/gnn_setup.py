@@ -645,7 +645,7 @@ def get_trunk(parents, leaf, root=0):
         tgt = parents[tgt]
     return trunk
 
-def make_directed_and_prune_augment(X_edges, X_force, X_pos, Y_pos, make_directed=True, prune_augmented=True):
+def make_directed_and_prune_augment(X_edges, X_force, X_pos, Y_pos, make_directed=True, prune_augmented=True, ori=False):
     """
     Make the dataset edge connections directed and augment the dataset by random pruning.
     Note that this function assumes the input coming from graphs in same topology and same node ordering.
@@ -705,7 +705,7 @@ def make_directed_and_prune_augment(X_edges, X_force, X_pos, Y_pos, make_directe
             edges = []
             for tgt in range(1, len(neighbor_dict)):
                 src = parents[tgt]
-                if src == 0:
+                if src == 0 and not ori:
                     edges.append([src, tgt])
                 elif (tgt, src) in trunk:
                     edges.append([tgt, src])
@@ -1126,7 +1126,7 @@ def make_dataset(X_edges, X_force, X_pos, Y_pos, profile,
     
     if rotate_augmented:
         X_edges, X_force, X_pos, Y_pos = rotate_augment(X_edges, X_force, X_pos, Y_pos)
-    
+    ori = profile == 3 or profile == 4 or profile == 5
     if profile == 1 or profile == 2:
         X_edges, X_pos, Y_pos, X_force = remove_duplicate_nodes(X_edges, X_pos, Y_pos, X_force)
         if profile == 2:
@@ -1136,7 +1136,8 @@ def make_dataset(X_edges, X_force, X_pos, Y_pos, profile,
 
     X_edges, X_force, X_pos, Y_pos = make_directed_and_prune_augment(X_edges, X_force, X_pos, Y_pos,
                                                                      make_directed=make_directed, 
-                                                                     prune_augmented=prune_augmented)
+                                                                     prune_augmented=prune_augmented,
+                                                                     ori=ori)
 
     num_graphs = len(X_pos)
     dataset = []
@@ -1218,8 +1219,9 @@ topology_break = args.topbrk
 # 0: no graph alteration
 # 1: transform into node representation (graph nodes are tree points)
 # 2: transform into node representation with thickness parameter
-# 3: load as orientational representation
+# 3: load as orientational representation with quaternion angles
 # 4: load as orientational representation with rpy angles
+# 5: load as orientational representation with quaternion angles and custom loss function
 
 if profile == 1:
     in_size = 6     # 3 positional 3 force
@@ -1345,7 +1347,7 @@ if topology_break:
     val_dataset = dataset[:val_idx]
     random.shuffle(val_dataset)
 
-    test_dataset = val_dataset[:2000]
+    test_dataset = val_dataset[:1000]
 else:
     random.shuffle(dataset)
 
@@ -1357,7 +1359,7 @@ else:
     
     random.shuffle(val_dataset)
     test_val_split = int(len(val_dataset))
-    test_dataset = val_dataset[:2000]
+    test_dataset = val_dataset[:1000]
 
 #X_force_train = X_force_arr[:train_val_split] 
 #X_pos_train = X_pos_arr[:train_val_split] 
