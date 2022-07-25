@@ -1163,7 +1163,7 @@ def shuffle_in_unison(a,b,c):
     np.random.shuffle(order)
     return a[order],b[order],c[order]
 
-def get_dataset_metrics(dataset):
+def get_dataset_metrics(dataset, suffix):
     avg_displacements_per_node = []
     for tree_graph_push in dataset:
         avg_displacement_per_node = np.sum(np.linalg.norm(tree_graph_push.x.numpy()[:,:3] - tree_graph_push.y.numpy()[:,:3], axis=1))/len(tree_graph_push.x)
@@ -1186,7 +1186,7 @@ def get_dataset_metrics(dataset):
     ax = fig.add_subplot(111)
     ax.plot(dict_keys, accum_list)
     display(fig)
-    plt.savefig(results_path+"dataset_analysis")
+    plt.savefig(results_path+"dataset_analysis_"+suffix)
     clear_output(wait=True)
 
 
@@ -1266,6 +1266,7 @@ if args.file_directory is not None:
     d = args.file_directory 
 
 dataset = []
+val_dataset = []
 for tree_pt in TREE_PTS:
     prefix = "[%s]"%tree_pt
     try:
@@ -1295,15 +1296,17 @@ for tree_pt in TREE_PTS:
         X_pos_arr = np.concatenate(X_pos_list)
         Y_pos_arr = np.concatenate(Y_pos_list)
         dataset_tree = make_dataset(X_edges, X_force_arr, X_pos_arr, Y_pos_arr, profile=profile, make_directed=True, prune_augmented=False, rotate_augmented=False)
-        if i == 3: #grab 3 trees (all pushes) for the validation set
-            val_idx = len(dataset)
         i += 1
         tree += 1
-        dataset = dataset + dataset_tree
+        if i <= 3 and topology_break:
+            val_dataset = val_dataset + dataset_tree
+        else:
+            dataset = dataset + dataset_tree
 
 print("[%s] done"%datetime.datetime.now())
 print("[%s] generating dataset metrics"%datetime.datetime.now())
-get_dataset_metrics(dataset)
+get_dataset_metrics(dataset, "train")
+get_dataset_metrics(val_dataset, "val")
 # Shuffle Dataset
 #X_force_arr, X_pos_arr, Y_pos_arr = shuffle_in_unison(X_force_arr, X_pos_arr, Y_pos_arr)
 print("[%s] done"%datetime.datetime.now())
@@ -1342,14 +1345,13 @@ print("[%s] done"%datetime.datetime.now())
 print("[%s] preparing dataset"%datetime.datetime.now())
 
 if topology_break:
-    print(val_idx)
-    train_dataset = dataset[val_idx:]
+    train_dataset = dataset
     random.shuffle(train_dataset)
 
-    val_dataset = dataset[:val_idx]
     random.shuffle(val_dataset)
+    print(len(val_dataset))
 
-    test_dataset = val_dataset[:1000]
+    test_dataset = val_dataset[:2000]
 else:
     random.shuffle(dataset)
 
