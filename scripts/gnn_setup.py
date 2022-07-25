@@ -1363,7 +1363,7 @@ else:
     
     random.shuffle(val_dataset)
     test_val_split = int(len(val_dataset))
-    test_dataset = val_dataset[:1000]
+    test_dataset = val_dataset[:2000]
 
 #X_force_train = X_force_arr[:train_val_split] 
 #X_pos_train = X_pos_arr[:train_val_split] 
