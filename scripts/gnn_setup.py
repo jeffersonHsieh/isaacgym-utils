@@ -1202,7 +1202,7 @@ parser.add_argument("-btchs", type=int, default=256, dest="batch_size", help="ba
 parser.add_argument("-ilr", type=float, default=2e-3, dest="learn_rate", help="initial learning rate")
 parser.add_argument("-cuda", type=int, dest="cuda", help="cuda gpu to run on")
 parser.add_argument("-weights", type=str, dest="weights", help="saved model weights to load")
-parser.add_argument("-topbrk", type=bool, default=True, dest="topbrk", help="topology break: if on, the validation tree topologies will not be present in the train set")
+parser.add_argument("-topbrk", type=int, default=1, choices=[0,1], dest="topbrk", help="topology break: if on, the validation tree topologies will not be present in the train set")
 parser.add_argument("-hidden_size", type=int, default=-1, dest="hidden_size", help="sets the hidden size of the network")
 
 parser.add_argument("-profile", type=int, default=0, choices=[0,1,2,3,4,5], dest="profile")
@@ -1214,7 +1214,7 @@ parser.add_argument("-profile", type=int, default=0, choices=[0,1,2,3,4,5], dest
 args = parser.parse_args()
 
 profile = args.profile
-topology_break = args.topbrk
+topology_break = args.topbrk == 1
 #profile choices:
 # 0: no graph alteration
 # 1: transform into node representation (graph nodes are tree points)
@@ -1343,7 +1343,7 @@ ax = fig.add_subplot(111)
 print("[%s] done"%datetime.datetime.now())
 
 print("[%s] preparing dataset"%datetime.datetime.now())
-
+print(topology_break)
 if topology_break:
     train_dataset = dataset
     random.shuffle(train_dataset)
@@ -1353,6 +1353,7 @@ if topology_break:
 
     test_dataset = val_dataset[:2000]
 else:
+    print("works")
     random.shuffle(dataset)
 
     # setup validation/test split
