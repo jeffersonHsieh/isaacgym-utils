@@ -425,8 +425,11 @@ class GymScene:
                 break
 
             if policy is not None:
+                done = []
                 for env_idx in self.env_idxs:
-                    policy(self, env_idx, t_step, t_sim)
+                    done.append(policy(self, env_idx, t_step, t_sim))
+                if any(done):
+                    break
 
             self.step()
             self.render(custom_draws=custom_draws)

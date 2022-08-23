@@ -136,11 +136,11 @@ def adjust_indexing(tuple_list, deleted_index):
         new_tuple_list.append((i,j))
     return new_tuple_list
 
-GET_PATH = "/mnt/hdd/jan-malte/10Nodes_new_by_tree/"
-PUT_PATH = "/mnt/hdd/jan-malte/10Nodes_new_by_tree/"
-TREE_NUM = 24
+GET_PATH = "/mnt/hdd/jan-malte/10Nodes_new_test_by_tree/"
+PUT_PATH = "/mnt/hdd/jan-malte/10Nodes_new_test_by_tree/"
+TREE_NUM = 3
 TREE_PTS = 10
-TREE_START = 11
+TREE_START = 0
 
 for tree in range(TREE_START, TREE_NUM):
     prefix = "[%s]"%TREE_PTS

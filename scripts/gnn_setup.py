@@ -22,6 +22,8 @@ import argparse
 import datetime
 from torch.autograd import Variable
 import math
+import GPUtil
+from torch_geometric_temporal import GConvLSTM
 
 DATASET_DIR = "/mnt/hdd/jan-malte/8Nodes_new_by_tree/"
 TREE_NUM = 25
@@ -63,6 +65,55 @@ class FGCNResidualBlock(torch.nn.Module):
         x = self.block(x, edge_index)
         x = self.bn(x)
         x = self.do(x)
+        return x
+
+class GConvLSTMBlock(torch.nn.Module):
+    def __init__(self, hidden_size, p):
+        super().__init__()
+        K = 7 # TODO: CHANGE LATER ONCE I FIGURED OUT WHAT THAT DOES AND THIS APPROACH LOOKS PROMISING
+        self.block = GConvLSTM(hidden_size, hidden_size, K)
+        self.bn = torch.nn.BatchNorm1d(hidden_size)
+        self.do = torch.nn.Dropout(p)
+
+    def forward(self, x, edge_index, C=None):
+        x, new_c = self.block(x, edge_index, C=C)
+        x = self.bn(x)
+        x = self.do(x)
+        return x, new_c
+
+class FGCNRec(torch.nn.Module):
+    def __init__(self, n_layers, in_size, out_size, hidden_size=1280):
+        super().__init__()
+        #hidden_size = 1280 
+        p = 0.4
+        self.stem = torch.nn.Sequential(
+            torch.nn.Linear(in_size, hidden_size),  
+            torch.nn.ReLU(),
+        ) 
+
+        self.blocks = torch.nn.ModuleList([GConvLSTMBlock(hidden_size,p) for _ in range(0,n_layers)])
+
+        self.out = torch.nn.Sequential(
+            torch.nn.Linear(hidden_size, out_size)
+        ) 
+        
+
+    def forward(self, data):
+        x, edge_index = data.x, data.edge_index
+
+        graph_size = 8 #int(len(data.x)/data.num_graphs)
+        #print(graph_size)
+
+        x = self.stem(x)
+
+        idx = 0
+        C = None
+        while idx < graph_size:
+            for block in self.blocks:
+                x, C = block(x, edge_index, C=C)
+            idx += 1
+
+        x = self.out(x)        
         return x
 
 class FGCN(torch.nn.Module): 
@@ -263,7 +314,7 @@ def train(model, optimizer, criterion, train_loader, epoch, device, out_size, pr
 def first_value(e):
     return e[0]
 
-def print_loss_by_tree(base, val, epoch):
+def print_loss_by_tree(base, val):
     zipped = list(zip(base, val))
     zipped.sort(key=first_value) 
 
@@ -273,10 +324,12 @@ def print_loss_by_tree(base, val, epoch):
     fig = plt.figure()
     ax = fig.add_subplot(111)
     ax.scatter(base, val, s=4)
+    ax.plot(base, base, color="orange")
     ax.set_xlabel("base loss")
     ax.set_ylabel("validation loss")
-    display(fig)
-    plt.savefig(results_path+"base_vs_val_by_tree_epoch%s"%epoch)
+    #display(fig)
+    plt.savefig(results_path+"base_vs_loss_by_tree")
+    plt.close()
     clear_output(wait=True)
 
 def validate(model, criterion, val_loader, epoch, device, profile, out_size):
@@ -291,38 +344,38 @@ def validate(model, criterion, val_loader, epoch, device, profile, out_size):
     for batch in val_loader:
         batch.to(device)
         out = model(batch)
-        # only do this like every tenth epoch or so
-        if epoch%10 == 0:
-            y_tree_array = batch.y.detach().cpu().numpy()
-            x_tree_array = batch.x.detach().cpu().numpy()
-            pred_array = out.detach().cpu().numpy()
-            
-            y_shape = np.shape(y_tree_array)
-            x_shape = np.shape(x_tree_array)
-            pred_shape = np.shape(pred_array)
+        # does not work for mixed tree complexities, since its impossible to tell how to reshape the trees. Move to test function instead
+        #if epoch%10 == 0:
+        #    y_tree_array = batch.y.detach().cpu().numpy()
+        #    x_tree_array = batch.x.detach().cpu().numpy()
+        #    pred_array = out.detach().cpu().numpy()
+        #    
+        #    y_shape = np.shape(y_tree_array)
+        #    x_shape = np.shape(x_tree_array)
+        #    pred_shape = np.shape(pred_array)
 
-            if profile == 3 or profile == 4 or profile == 5:
-                y_tree_array = np.reshape(y_tree_array, (batch.num_graphs,int(len(batch.y)/batch.num_graphs), y_shape[1])) 
-                x_tree_array = np.reshape(x_tree_array, (batch.num_graphs,int(len(batch.y)/batch.num_graphs), x_shape[1])) 
-                pred_array = np.reshape(pred_array, (batch.num_graphs,int(len(batch.y)/batch.num_graphs), pred_shape[1]))
+        #    if profile == 3 or profile == 4 or profile == 5:
+        #        y_tree_array = np.reshape(y_tree_array, (batch.num_graphs,int(len(batch.y)/batch.num_graphs), y_shape[1])) 
+        #        x_tree_array = np.reshape(x_tree_array, (batch.num_graphs,int(len(batch.y)/batch.num_graphs), x_shape[1])) 
+        #        pred_array = np.reshape(pred_array, (batch.num_graphs,int(len(batch.y)/batch.num_graphs), pred_shape[1]))
 
-                base_loss_by_tree = []
-                val_loss_by_tree = []
-                for tree_idx in range(0,len(y_tree_array)):
-                    base_loss_by_tree.append(criterion(torch.tensor(x_tree_array[tree_idx,:,3:ori_end]).to(device), torch.tensor(y_tree_array[tree_idx,:,3:ori_end]).to(device))) 
-                    val_loss_by_tree.append(criterion(torch.tensor(pred_array[tree_idx]).to(device), torch.tensor(y_tree_array[tree_idx,:,3:ori_end]).to(device)))
-                base_loss_by_tree = torch.tensor(base_loss_by_tree)
-                val_loss_by_tree = torch.tensor(val_loss_by_tree)
-            else:
-                y_tree_array = np.reshape(y_tree_array, (batch.num_graphs,int(len(batch.y)/batch.num_graphs),y_shape[1])) # only works if we just take positions into account (no orientation)
-                x_tree_array = np.reshape(x_tree_array, (batch.num_graphs,int(len(batch.y)/batch.num_graphs),x_shape[1])) # only works if we just take positions into account (no orientation)
-                pred_array = np.reshape(pred_array, (batch.num_graphs,int(len(batch.y)/batch.num_graphs),pred_shape[1])) # only works if we just take positions into account (no orientation)
+        #        base_loss_by_tree = []
+        #        val_loss_by_tree = []
+        #        for tree_idx in range(0,len(y_tree_array)):
+        #            base_loss_by_tree.append(criterion(torch.tensor(x_tree_array[tree_idx,:,3:ori_end]).to(device), torch.tensor(y_tree_array[tree_idx,:,3:ori_end]).to(device))) 
+        #            val_loss_by_tree.append(criterion(torch.tensor(pred_array[tree_idx]).to(device), torch.tensor(y_tree_array[tree_idx,:,3:ori_end]).to(device)))
+        #        base_loss_by_tree = torch.tensor(base_loss_by_tree)
+        #        val_loss_by_tree = torch.tensor(val_loss_by_tree)
+        #    else:
+        #        y_tree_array = np.reshape(y_tree_array, (batch.num_graphs,int(len(batch.y)/batch.num_graphs),y_shape[1])) # only works if we just take positions into account (no orientation)
+        #        x_tree_array = np.reshape(x_tree_array, (batch.num_graphs,int(len(batch.y)/batch.num_graphs),x_shape[1])) # only works if we just take positions into account (no orientation)
+        #        pred_array = np.reshape(pred_array, (batch.num_graphs,int(len(batch.y)/batch.num_graphs),pred_shape[1])) # only works if we just take positions into account (no orientation)
 
-                base_loss_by_tree = np.sum(np.linalg.norm(x_tree_array[:,:,:3] - y_tree_array[:,:,:3], axis=2), axis=1)*batch.num_graphs/len(batch.y)
-                val_loss_by_tree = np.sum(np.linalg.norm(pred_array[:,:,:] - y_tree_array[:,:,:3], axis=2), axis=1)*batch.num_graphs/len(batch.y)
+        #        base_loss_by_tree = np.sum(np.linalg.norm(x_tree_array[:,:,:3] - y_tree_array[:,:,:3], axis=2), axis=1)*batch.num_graphs/len(batch.y)
+        #        val_loss_by_tree = np.sum(np.linalg.norm(pred_array[:,:,:] - y_tree_array[:,:,:3], axis=2), axis=1)*batch.num_graphs/len(batch.y)
 
-            base_loss_by_tree_list = base_loss_by_tree_list + base_loss_by_tree.tolist()
-            val_loss_by_tree_list = val_loss_by_tree_list + val_loss_by_tree.tolist()
+        #    base_loss_by_tree_list = base_loss_by_tree_list + base_loss_by_tree.tolist()
+        #    val_loss_by_tree_list = val_loss_by_tree_list + val_loss_by_tree.tolist()
 
         if profile == 3 or profile == 4 or profile == 5:
             running_l2_norm += criterion(out[:,:], batch.y[:,3:ori_end]).item()
@@ -333,8 +386,8 @@ def validate(model, criterion, val_loader, epoch, device, profile, out_size):
             num_graphs+=out.size()[0]
 
     # print validation error per tree
-    if epoch%10 == 0:
-        print_loss_by_tree(base_loss_by_tree_list, val_loss_by_tree_list, epoch)
+    #if epoch%10 == 0:
+    #    print_loss_by_tree(base_loss_by_tree_list, val_loss_by_tree_list, epoch)
 
     # average the loss functions  
     if profile == 3 or profile == 4 or profile == 5:
@@ -406,17 +459,27 @@ def reconstruct_positional_data(rotations, edges, init_pos, rpy=False):
 
 def test(model, test_loader, device, profile, out_size):
     model.eval()
+    running_l2_norm_by_root_dist = {}
+    root_dist_accumulator = {}
+    running_l2_base_by_root_dist = {}
+    l2_norms = []
+    l2_norm_base = []
+    l2_norm_averaged = []
+    l2_norm_base_averaged = []
     running_l2_norm = 0
     running_l2_norm_base = 0
     num_graphs = 0
     idx = 0
     ori_end = 3+out_size
     for batch in test_loader:
+        #GPUtil.showUtilization()
+        root_dist_dict = generate_root_distance_dict(batch.edge_index.detach().cpu().numpy().T)
         batch.to(device)
-        out = model(batch)
-        y = batch.y
-        x = batch.x
-        force = batch.x[:,-3:]
+        with torch.no_grad():
+            out = model(batch)
+        y = batch.y.detach()
+        x = batch.x.detach()
+        force = batch.x[:,-3:].detach()
         if profile==3 or profile==4 or profile==5:
             roty = batch.y.detach().cpu().numpy()[:,3:ori_end]
             rotx = batch.x.detach().cpu().numpy()[:,3:ori_end]
@@ -426,8 +489,33 @@ def test(model, test_loader, device, profile, out_size):
             y = reconstruct_positional_data(roty, batch.edge_index.detach().cpu().numpy(), batch.x.detach().cpu().numpy(), rpy=rpy).to(device)
             x = reconstruct_positional_data(rotx, batch.edge_index.detach().cpu().numpy(), batch.x.detach().cpu().numpy(), rpy=rpy).to(device)
 
-        running_l2_norm += torch.sum(torch.norm(out[:,:3]-y[:,:3], dim=1))
-        running_l2_norm_base += torch.sum(torch.norm(x[:,:3]-y[:,:3], dim=1))
+        for i,node_dist in enumerate(torch.norm(out[:,:3]-y[:,:3], dim=1).detach().tolist()):
+            root_distance = root_dist_dict[i]
+            if root_distance in running_l2_norm_by_root_dist.keys():
+                running_l2_norm_by_root_dist[root_distance].append(node_dist)
+                root_dist_accumulator[root_distance] += 1
+            else:
+                running_l2_norm_by_root_dist[root_distance] = [node_dist]
+                root_dist_accumulator[root_distance] = 1
+
+        for i,base_dist in enumerate(torch.norm(x[:,:3]-y[:,:3], dim=1).detach().tolist()):
+            root_distance = root_dist_dict[i]
+            if root_distance in running_l2_base_by_root_dist.keys():
+                running_l2_base_by_root_dist[root_distance].append(base_dist)
+            else:
+                running_l2_base_by_root_dist[root_distance] = [base_dist]
+
+        norm = torch.sum(torch.norm(out[:,:3]-y[:,:3], dim=1))
+        base = torch.sum(torch.norm(x[:,:3]-y[:,:3], dim=1))
+
+        l2_norms.append(norm.detach().item())
+        l2_norm_base.append(base.detach().item())
+
+        l2_norm_averaged.append(norm.detach().item()/out.size()[0])
+        l2_norm_base_averaged.append(base.detach().item()/out.size()[0])
+
+        running_l2_norm += norm
+        running_l2_norm_base += base
         num_graphs+=out.size()[0]
         if idx < 10:
             visualize_graph(out[:,:3], 
@@ -435,16 +523,91 @@ def test(model, test_loader, device, profile, out_size):
                             x[:,:3], 
                             batch.edge_index, batch.force_node[0], 
                             force, results_path+"prediction_example%s"%idx)
-        idx += 1 
+        idx += 1  
+        #print("#####################################")
+
+    l2_norm_by_node = []
+    l2_norm_base_by_node = []
+    root_dists = list(root_dist_accumulator.keys())
+    root_dists.sort()
+    for root_dist in root_dists:
+        l2_norm_by_node.append(sum(running_l2_norm_by_root_dist[root_dist])/root_dist_accumulator[root_dist])
+        l2_norm_base_by_node.append(sum(running_l2_base_by_root_dist[root_dist])/root_dist_accumulator[root_dist])
+
+    l2_std_dev_by_node = []
+    l2_std_dev_base_by_node = []
+    for root_dist in root_dists:
+        l2_std_dev_by_node.append(calc_variance(l2_norm_by_node[root_dist], running_l2_norm_by_root_dist[root_dist])**(1/2))
+        l2_std_dev_base_by_node.append(calc_variance(l2_norm_base_by_node[root_dist], running_l2_base_by_root_dist[root_dist])**(1/2))
+
+    #fig = plt.figure()
+    #ax = fig.add_subplot(111)
+
+    X_axis = np.arange(len(root_dists))
+
+    plt.bar(X_axis - 0.2, l2_norm_by_node, 0.4, label = 'prediction error', yerr=l2_std_dev_by_node)
+    plt.bar(X_axis + 0.2, l2_norm_base_by_node, 0.4, label = 'baseline error', yerr=l2_std_dev_base_by_node)
+
+    plt.xticks(X_axis, root_dists)
+    plt.xlabel("Distance from root node")
+    plt.ylabel("L2 distance")
+    plt.title("error by distance to root node")
+    plt.legend()
+
+    #ax.bar(root_dists, l2_norm_by_node, yerr=l2_std_dev_by_node)
+    plt.savefig(results_path+"error_by_node")
+    plt.close()
+    #plt.show() 
+
+    #fig = plt.figure()
+    #ax = fig.add_subplot(111)
+    #ax.bar(root_dists, l2_norm_base_by_node, yerr=l2_std_dev_base_by_node)
+    #plt.savefig(results_path+"base_by_node")
+    #plt.show()
+
     l2_norm = running_l2_norm/num_graphs
     l2_base = running_l2_norm_base/num_graphs
-    print('Average node distance error: {}'.format(l2_norm))
-    print('Average base node displacement: {}'.format(l2_base))
+
+    l2_std_dev = calc_variance(l2_norm, l2_norms, N=num_graphs)**2
+    l2_base_std_dev = calc_variance(l2_base, l2_norm_base, N=num_graphs)**2
+
+    print_loss_by_tree(l2_norm_base_averaged, l2_norm_averaged)
+
+    print('Mean node distance error: {}'.format(l2_norm))
+    print('Mean base node displacement: {}'.format(l2_base))
+    print('Variance of node distance error: {}'.format(l2_std_dev))
+    print('Variance of base node displacement: {}'.format(l2_base_std_dev))
+
     return l2_norm, l2_base
+
+def calc_variance(mean, scores, N=None):
+    running_var = 0
+    for score in scores:
+        running_var += (mean - score)**2
+    
+    if N is not None:
+        variance = running_var/N
+    else:
+        variance = running_var/len(scores)
+    return variance
+
+def generate_root_distance_dict(tree_edges): # assumes 0 is always the root node
+    dist_dict = {0:0}
+    frontier = [0]
+    explored = []
+    while len(frontier) != 0:
+        explore = frontier.pop()
+        explored.append(explore)
+        children = find_children(tree_edges, explore)
+        for child in children:
+            if child not in explored:
+                frontier.append(child)
+                dist_dict[child] = dist_dict[explore] + 1
+    return dist_dict
+
 
 def visualize_graph(X, Y, X_0, edge_index, force_node, force, name):
     force = force.detach().cpu().numpy()
-    print(force)
     
     force_vector = force[force_node]/np.linalg.norm(force[force_node])/2
     force_A = X_0.detach().cpu().numpy()[force_node]
@@ -495,7 +658,8 @@ def visualize_graph(X, Y, X_0, edge_index, force_node, force, name):
     ax = set_axes_equal(ax)
     plt.tight_layout()
     plt.savefig(name)
-    plt.show() 
+    plt.close()
+    #plt.show() 
 
 def make_gif(X, Y, X_0, edge_index, force_node, force, id):
     force = force.detach().cpu().numpy()
@@ -1182,12 +1346,16 @@ def get_dataset_metrics(dataset, suffix):
     for key in dict_keys:
         accum_list.append(column_diag_dict[key])
 
-    fig = plt.figure()
-    ax = fig.add_subplot(111)
-    ax.plot(dict_keys, accum_list)
-    display(fig)
-    plt.savefig(results_path+"dataset_analysis_"+suffix)
-    clear_output(wait=True)
+    X_axis = np.arange(len(dict_keys))
+
+    plt.figure(figsize=(15,4))
+    plt.xticks(rotation=90)
+    plt.bar(X_axis, accum_list)
+    plt.xticks(X_axis, dict_keys)
+    plt.title("dataset analysis for "+suffix)
+    plt.savefig(results_path+"dataset_analysis_"+suffix, format="png")
+    #plt.show()
+    plt.close()
 
 
 ##### FUNCTION DEF END #####
@@ -1204,8 +1372,9 @@ parser.add_argument("-cuda", type=int, dest="cuda", help="cuda gpu to run on")
 parser.add_argument("-weights", type=str, dest="weights", help="saved model weights to load")
 parser.add_argument("-topbrk", type=int, default=1, choices=[0,1], dest="topbrk", help="topology break: if on, the validation tree topologies will not be present in the train set")
 parser.add_argument("-hidden_size", type=int, default=-1, dest="hidden_size", help="sets the hidden size of the network")
+parser.add_argument("-sep_test", type=int, default=1, dest="sep_test", help="set to 0 when we test on the same dataset that provided weights were trained on")
 
-parser.add_argument("-profile", type=int, default=0, choices=[0,1,2,3,4,5], dest="profile")
+parser.add_argument("-profile", type=int, default=0, choices=[0,1,2,3,4,5,6], dest="profile")
 #parser.add_argument("-ori", type=bool, default=False, dest="orientational", help="wether or not we use directional mode (only predict directional information)")
 #parser.add_argument("-rpy", type=bool, default=False, dest="rpy", help="if true we use rpy for rotations not quaternion")
 #parser.add_argument("-ath", type=bool, default=False, dest="add_thickness", help="wether or not to add branch thickness")
@@ -1222,6 +1391,7 @@ topology_break = args.topbrk == 1
 # 3: load as orientational representation with quaternion angles
 # 4: load as orientational representation with rpy angles
 # 5: load as orientational representation with quaternion angles and custom loss function
+# 6: load as positional like in 0 but use FGCNRec as model
 
 if profile == 1:
     in_size = 6     # 3 positional 3 force
@@ -1235,7 +1405,7 @@ elif profile == 3 or profile == 5:
 elif profile == 4:
     in_size = 10    # 3 positional 3 orientational 1 lenght 3 force
     out_size = 3    # 3 orientational
-elif profile == 0:
+elif profile == 0 or profile == 6:
     in_size = 10    # 3 positional 4 orientational 3 force
     out_size = 3    # 3 positional
 
@@ -1270,7 +1440,7 @@ val_dataset = []
 for tree_pt in TREE_PTS:
     prefix = "[%s]"%tree_pt
     try:
-        checkload = np.load(d + prefix + 'X_coeff_stiff_damp_tree%s.npy'%0) #assumes full dataset present (should be true anyways)
+        checkload = np.load(d + prefix + 'X_edge_def_tree%s.npy'%0) #assumes full dataset present (should be true anyways)
     except:
         prefix = ""
 
@@ -1289,6 +1459,7 @@ for tree_pt in TREE_PTS:
         Y_pos_list = []
         ori = profile == 3 or profile == 4 or profile == 5
         X_edges, X_force, X_pos, Y_pos = load_npy(d, tree, ori, prefix)
+        print(len(X_force))
         X_force_list.append(X_force)
         X_pos_list.append(X_pos)
         Y_pos_list.append(Y_pos)
@@ -1305,8 +1476,9 @@ for tree_pt in TREE_PTS:
 
 print("[%s] done"%datetime.datetime.now())
 print("[%s] generating dataset metrics"%datetime.datetime.now())
-get_dataset_metrics(dataset, "train")
-get_dataset_metrics(val_dataset, "val")
+get_dataset_metrics(dataset, "train") # TODO: figure out, why this wont save the generated plot ...
+if topology_break:
+    get_dataset_metrics(val_dataset, "val") # TODO: ... but this will
 # Shuffle Dataset
 #X_force_arr, X_pos_arr, Y_pos_arr = shuffle_in_unison(X_force_arr, X_pos_arr, Y_pos_arr)
 print("[%s] done"%datetime.datetime.now())
@@ -1351,7 +1523,7 @@ if topology_break:
     random.shuffle(val_dataset)
     print(len(val_dataset))
 
-    test_dataset = val_dataset[:2000]
+    test_dataset = val_dataset#[:8000]
 else:
     print("works")
     random.shuffle(dataset)
@@ -1364,7 +1536,11 @@ else:
     
     random.shuffle(val_dataset)
     test_val_split = int(len(val_dataset))
-    test_dataset = val_dataset[:2000]
+    test_dataset = val_dataset#[:8000]
+
+if args.weights is not None and args.sep_test == 1:
+    print("loading full dataset")
+    test_dataset = dataset
 
 #X_force_train = X_force_arr[:train_val_split] 
 #X_pos_train = X_pos_arr[:train_val_split] 
@@ -1387,7 +1563,7 @@ else:
 batch_size=args.batch_size
 train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
 val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
-test_loader = DataLoader(test_dataset, batch_size=1, shuffle=True)
+test_loader = DataLoader(test_dataset, batch_size=1, shuffle=True, num_workers=0)
 
 print("[%s] done"%datetime.datetime.now())
 #check train dataset?
@@ -1411,11 +1587,13 @@ else:
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 if not torch.cuda.is_available():
     print("running on CPU")
-
-if args.hidden_size != -1:
-    model = FGCN(args.graph_nodes, in_size, out_size, args.hidden_size).to(device)
+if profile == 6:
+    model = FGCNRec(1, in_size, out_size).to(device) #TODO: make more adjustable once proven useful
 else:
-    model = FGCN(args.graph_nodes, in_size, out_size).to(device)
+    if args.hidden_size != -1:
+        model = FGCN(args.graph_nodes, in_size, out_size, args.hidden_size).to(device)
+    else:
+        model = FGCN(args.graph_nodes, in_size, out_size).to(device)
 if args.weights is None:
     optimizer = torch.optim.Adam(model.parameters(), lr=args.learn_rate)
     if profile == 5: 
@@ -1460,7 +1638,8 @@ if args.weights is None:
         ax.plot(base_loss_history, 'g', label='baseline loss')
         ax.legend(loc="upper right")
         ax.set_ylim([0, 0.2])
-        display(fig)
+        #display(fig)
+        plt.close()
         clear_output(wait=True)
         print("[%s] epoch %s"%(datetime.datetime.now(), epoch))
 

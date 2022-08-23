@@ -19,7 +19,7 @@ import pdb
 import sys
 import datetime
 
-PATH = "/mnt/hdd/jan-malte/12Nodes_new/" #"/home/jan-malte/Dataset/8Nodes/" #"/home/jan-malte/Dataset/" #"/media/jan-malte/INTENSO/"
+PATH = "/mnt/hdd/jan-malte/10Nodes_new_test/" #"/home/jan-malte/Dataset/8Nodes/" #"/home/jan-malte/Dataset/" #"/media/jan-malte/INTENSO/"
 
 def import_tree(name_dict, urdf_path, yaml_path, edge_def, stiffness_list, damping_list, tree_num, tree_pts):
     global no_contact, force, loc_tree, random_index, contact_transform, not_saved

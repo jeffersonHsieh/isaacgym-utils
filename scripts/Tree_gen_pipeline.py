@@ -7,7 +7,7 @@ import argparse
 
 TREE_NUM = 100
 ENV_NUM = 100
-MAX_TREE_POINTS = 12
+MAX_TREE_POINTS = 10
 TRUNK_HEIGHT_FACTORS = [1,2]
 SCALING = 2
 PIPE_MODEL_EXPONENT = 3 #suggested values: 2 or 3
@@ -28,7 +28,7 @@ parser.add_argument("-tree_pts", type=int, dest="tree_pts", help="number of gene
 args = parser.parse_args()
 tree_pts = args.tree_pts
 
-tree = 0
+tree = 3
 while tree < TREE_NUM:
     trunk_height = STEP_WIDTH * 0.75 / SCALING #TRUNK_HEIGHT_FACTORS[random.randrange(0, len(TRUNK_HEIGHT_FACTORS))] / SCALING
     d_termination = STEP_WIDTH/random.randrange(3, 6)
