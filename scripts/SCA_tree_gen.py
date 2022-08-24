@@ -46,6 +46,7 @@ class TreeGenerator(object):
         self.scaling = scaling
         self.pipe_model_exponent = pipe_model_exponent
         self.step_width_scaling = step_width_scaling
+        self.names =
 
     def min_da(self):
         min_da = None
