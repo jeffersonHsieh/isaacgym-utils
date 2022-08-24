@@ -130,6 +130,10 @@ dmypy.json
 
 *.swp
 *.swo
+*.pt
 
 outs/
 .vscode/
+
+# wandb
+scripts/wandb

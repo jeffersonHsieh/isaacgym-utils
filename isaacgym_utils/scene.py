@@ -78,26 +78,29 @@ class GymScene:
             setup(self, self._current_mutable_env_idx)
 
             self._current_mutable_env_idx += 1
-            
+
         if self.use_gpu_pipeline:
             n_rbs_sim = self.gym.get_sim_rigid_body_count(self.sim)
             assert n_rbs_sim % self.n_envs == 0
             n_rbs_env = n_rbs_sim // self.n_envs
             n_dofs_sim = self.gym.get_sim_dof_count(self.sim)
 
-            self.gym.prepare_sim(self.sim)
+            self.gym.prepare_sim(self.sim) # SEGFAULT ISSUE HERE
+            
             self._tensors = {
                 'root': gymtorch.wrap_tensor(self.gym.acquire_actor_root_state_tensor(self.sim)),
                 'rb_states': gymtorch.wrap_tensor(self.gym.acquire_rigid_body_state_tensor(self.sim)),
                 'net_cf': gymtorch.wrap_tensor(self.gym.acquire_net_contact_force_tensor(self.sim)),
                 'dof_states': gymtorch.wrap_tensor(self.gym.acquire_dof_state_tensor(self.sim))
             }
+           
             self._tensors.update({
                 'dof_targets': torch.zeros(n_dofs_sim, device=self.gpu_device, dtype=torch.float),
                 'dof_actuation_force': torch.zeros(n_dofs_sim, device=self.gpu_device, dtype=torch.float),
                 'forces': torch.zeros((self.n_envs, n_rbs_env, 3), device=self.gpu_device, dtype=torch.float),
                 'forces_pos': torch.zeros((self.n_envs, n_rbs_env, 3), device=self.gpu_device, dtype=torch.float)
             })
+            
             self._actor_idxs_to_update = {
                 'root': [],
                 'dof_states': [],
@@ -245,7 +248,7 @@ class GymScene:
 
         asset.set_shape_props(env_idx, name)
         asset.set_rb_props(env_idx, name)
-        # print(f" ------------------- inside add asset function ------------------- ")
+        print(f" ------------------- inside add asset function ------------------- ")
         # print(f"env_idx, name: {env_idx, name}")
         # print(f"ah map: {self.ah_map[env_idx][name] }")
         asset.set_dof_props(env_idx, name)
@@ -418,13 +421,15 @@ class GymScene:
 
         while True:
             t_sim = t_step * self.dt
-
             if time_horizon is not None and t_step >= time_horizon:
                 break
 
             if policy is not None:
+                done = []
                 for env_idx in self.env_idxs:
-                    policy(self, env_idx, t_step, t_sim)
+                    done.append(policy(self, env_idx, t_step, t_sim))
+                if any(done):
+                    break
 
             self.step()
             self.render(custom_draws=custom_draws)

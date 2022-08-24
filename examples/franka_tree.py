@@ -11,15 +11,16 @@ from isaacgym_utils.assets import GymTree
 from isaacgym_utils.camera import GymCamera
 from isaacgym_utils.math_utils import RigidTransform_to_transform, np_to_vec3, vec3_to_np, quat_to_np
 from isaacgym_utils.policy import GraspBlockPolicy, MoveBlockPolicy
-from isaacgym_utils.draw import draw_transforms, draw_contacts, draw_camera, draw_spheres, draw_transforms_contact
+from isaacgym_utils.draw import draw_transforms, draw_contacts, draw_camera, draw_spheres
+#from isaacgym_utils.draw import draw_transforms_contact
 
 import pdb
 import sys
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    # parser.add_argument('--cfg', '-c', type=str, default='cfg/franka_tree.yaml')
-    parser.add_argument('--cfg', '-c', type=str, default='cfg/franka_tree_force_full.yaml')
+    parser.add_argument('--cfg', '-c', type=str, default='cfg/franka_tree.yaml')
+    # parser.add_argument('--cfg', '-c', type=str, default='cfg/franka_tree_force_full.yaml')
     args = parser.parse_args()
     cfg = YamlConfig(args.cfg)
 
@@ -31,7 +32,7 @@ if __name__ == "__main__":
     # franka = GymFranka(cfg['franka'], scene, actuation_mode='torques')
     tree = GymTree(cfg['tree'], scene, actuation_mode='joints')
 
-    # block = GymBoxAsset(scene, **cfg['block']['dims'],  shape_props=cfg['block']['shape_props'])
+    block = GymBoxAsset(scene, **cfg['block']['dims'],  shape_props=cfg['block']['shape_props'])
 
 
     # franka_transform = gymapi.Transform(p=gymapi.Vec3(1, 1, 0))
@@ -59,7 +60,7 @@ if __name__ == "__main__":
         # scene.add_asset(franka_name, franka, franka_transform, collision_filter=1) # avoid self-collisions
 
         scene.add_asset(tree_name, tree, tree_transform, collision_filter=1) # avoid self-collisions
-        # scene.add_asset('block', block, gymapi.Transform(p=gymapi.Vec3(-1, -1, cfg['block']['dims']['sz']/2)) )
+        scene.add_asset('block', block, gymapi.Transform(p=gymapi.Vec3(-1, -1, cfg['block']['dims']['sz']/2)) )
 
     scene.setup_all_envs(setup)    
 
@@ -70,7 +71,7 @@ if __name__ == "__main__":
             # print(f"random index {random_index}")
 
             contact_transform = (loc_tree)
-            draw_transforms_contact(scene, [env_idx], [contact_transform])
+            #draw_transforms_contact(scene, [env_idx], [contact_transform])
 
 
     def custom_draws(scene):
@@ -104,7 +105,7 @@ if __name__ == "__main__":
             # , ee_transform_l7, ee_transform_l8, ee_transform_l9, ee_transform_l10, ee_transform_l11, ee_transform_l12 ]
             draw_transforms(scene, [env_idx], transforms)
 
-            draw_transforms_contact(scene, [env_idx], [contact_transform])
+            #draw_transforms_contact(scene, [env_idx], [contact_transform])
 
 
         draw_contacts(scene, scene.env_idxs)
@@ -224,10 +225,10 @@ if __name__ == "__main__":
     
     loc_tree = tree_tf3.p
     random_index = 1
+
     
     def policy(scene, env_idx, t_step, t_sim):
         global vertex_init_pos, no_contact, force, loc_tree, vertex_final_pos, force_applied, random_index, contact_transform
-  
         # #get pose 
         tree_tf3 = tree.get_link_transform(0, tree_name, 'link3')
 
@@ -278,11 +279,10 @@ if __name__ == "__main__":
                 
             contact_draw(scene, env_idx, contact_transform)
             tree.apply_force(env_idx, tree_name, tree.link_names[random_index], force, loc_tree)
-
        
 
         # get delta pose
 
         # release tree
 
-    scene.run(policy=policy, custom_draws=custom_draws)
+    scene.run(policy=policy)
