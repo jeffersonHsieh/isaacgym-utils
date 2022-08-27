@@ -21,7 +21,7 @@ import datetime
 
 PATH = "/mnt/hdd/jan-malte/10Nodes_new_test/" #"/home/jan-malte/Dataset/8Nodes/" #"/home/jan-malte/Dataset/" #"/media/jan-malte/INTENSO/"
 
-def import_tree(name_dict, urdf_path, yaml_path, edge_def, stiffness_list, damping_list, tree_num, tree_pts):
+def import_tree(name_dict, urdf_path, yaml_path, edge_def, stiffness_list, damping_list, tree_num, tree_pts, path=PATH, num_iteration=10000):
     global no_contact, force, loc_tree, random_index, contact_transform, not_saved
     with open(yaml_path, "r") as f:
         cfg = yaml.load(f, Loader=yaml.Loader)
@@ -33,7 +33,6 @@ def import_tree(name_dict, urdf_path, yaml_path, edge_def, stiffness_list, dampi
     tree_name = 'tree'
 
     current_iteration = 0
-    num_iteration = 10000
     force_magnitude = 10
     push_toggle = True
 
@@ -120,11 +119,11 @@ def import_tree(name_dict, urdf_path, yaml_path, edge_def, stiffness_list, dampi
 
         print(f" ********* saving data ********* ")
         #print(np.shape(vertex_init_pos_list_arg))
-        save(PATH + '[%s]X_vertex_init_pos_tree%s_env%s'%(tree_pts, tree_num, env_idx), vertex_init_pos_list_arg )
+        save(path + '[%s]X_vertex_init_pos_tree%s_env%s'%(tree_pts, tree_num, env_idx), vertex_init_pos_list_arg )
         #save('X_coeff_stiff_damp_tree%s_env%s'%(tree_num, env_idx), coeff_stiff_damp )
         #save('X_edge_def_tree%s_env%s'%(tree_num, env_idx), edge_def )
-        save(PATH + '[%s]X_force_applied_tree%s_env%s'%(tree_pts, tree_num, env_idx), force_applied_list_arg )
-        save(PATH + '[%s]Y_vertex_final_pos_tree%s_env%s'%(tree_pts, tree_num, env_idx), vertex_final_pos_list_arg )
+        save(path + '[%s]X_force_applied_tree%s_env%s'%(tree_pts, tree_num, env_idx), force_applied_list_arg )
+        save(path + '[%s]Y_vertex_final_pos_tree%s_env%s'%(tree_pts, tree_num, env_idx), vertex_final_pos_list_arg )
 
         #print(f"Vinit, Vfinal, Fapplied lengths: {vertex_init_pos_list}")
         #sys.exit() 

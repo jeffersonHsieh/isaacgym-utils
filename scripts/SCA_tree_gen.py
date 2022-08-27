@@ -8,10 +8,9 @@ from scipy.spatial.transform import Rotation
 
 import yaml
 
-BATCH_SIZE = 1
-STIFFNESS_BASE = 11000
-SIMULATION_STEP_SIZE = 0.01
-GUI_ON = 0
+BATCH_SIZE = 1 # size of batches for random point generation. Lower values might speed up the process, but lead to variations in the final number of attraction points
+STIFFNESS_BASE = 11000 # factor used to calculate stiffness. 
+SIMULATION_STEP_SIZE = 0.01 # internal value for isaacgym simulation
 
 def sphere(pt, a=1.0, b=1.0, c=1.0):
     r = (pt[0]-0.5)**2*a + (pt[1]-0.5)**2*b + (pt[2]-0.5)**2*c
@@ -20,33 +19,42 @@ def sphere(pt, a=1.0, b=1.0, c=1.0):
 
 class TreeGenerator(object):
 
-    def __init__(self, att_pts_max, scaling, offset, da, dt, max_steps, step_width, max_tree_points, tip_radius, att_env_shape_funct=sphere, tree_id=0, pipe_model_exponent=2, att_pts_min=None, x_strech=1, y_strech=1, z_strech=1, step_width_scaling=1, env_num=1):
+    def __init__(self, att_pts_max, scaling, offset, da, dt, max_steps, step_width, max_tree_points, tip_radius, gui_on, att_env_shape_funct=sphere, tree_id=0, pipe_model_exponent=2, att_pts_min=None, x_strech=1, y_strech=1, z_strech=1, step_width_scaling=1, env_num=1):
         """
-
+        Sets up the tree generator with all of its parameters.
         :param att_pts_max: maximum number of attraction points. for further info see initialize_att_pts
         :param scaling: defines tree crown size. for further info see initialize_att_pts
         :param offset: defines tree crown position. for further info see initialize_att_pts
         :param da: attraction distance
         :param dt: termination distance
         :param max_steps: maximum amount of steps taken to generate tree model
+        :param tip_radius: radius of the branch tips in the generated tree.
+        :gui_on: 1 or 0. Determines whether Isaac Gym is run with gui or without it.
         :param step_width: the distance that parent and child nodes have to each other
         :param max_tree_points: algorithm stops after creating the specified number of tree points
         :param att_env_shape_funct: defines tree crown shape. for further info see initialize_att_pts
+        :param gui_on: controls wether or not isaac gym starts with or without gui (1 is on 0 is off)
+        :param tree_id: index of generated tree
+        :param pipe_model_exponent: exponent for the pipe model used to generate the branch thickness. should be 2 or 3. Higher values lead to lower increas in radius between segments
+        :param att_pts_min: minimum number of attraction points to be generated. Irellevant if BATCH_SIZE is 1
+        :param x_strech, y_strech, z_strech: strech values used to change the shape of the attraction point cloud. Each streches the shape along its respective axis
+        :param step_width_scaling: factor that the step width is multiplied with after each point generation round.
+        :param env_num: number of environments to be run in parallel
         """
-        self.tree_points = np.array([[0,0,0]])
+        self.tree_points = np.array([[0,0,0]]) # initilize root tree point
         if att_pts_min is None:
             att_pts_min = att_pts_max
         self.att_pts = self.initialize_att_pts(att_pts_max, att_pts_min, lambda pt: att_env_shape_funct(pt, x_strech, y_strech, z_strech), scaling, offset)
-        min_da = self.min_da()
-        if da < min_da:
+        min_da = self.min_da() # calculate the minimum da that still allows the root point to be attracted to at least one attraction point
+        if da < min_da: # if da is so small that no tree generation would happen, increase it to minimum value
             da = min_da
         self.da = da
         self.dt = dt
         self.max_steps = max_steps
         self.step_width = step_width
-        self.closest_tp = self.initialize_closest_tp_list()
+        self.closest_tp = self.initialize_closest_tp_list() # closest tp is a list that holds the closest tree point for every attraction point (index of attraction point is the index on this list) as well as the distance between ap and tp
         self.edges = {} # dictionary with keys as parents referencing np.arrays of [children, edge_thickness]
-        self.branch_thickness_dict = {}
+        self.branch_thickness_dict = {} # dictionar holding the branch thickness of the incoming edge. key: tp id, value: thickness
         self.max_tree_points = max_tree_points
         self.tip_radius = tip_radius
         self.tree_id = tree_id
@@ -54,11 +62,15 @@ class TreeGenerator(object):
         self.pipe_model_exponent = pipe_model_exponent
         self.step_width_scaling = step_width_scaling
 
-        self.name_dict = {"joints":[], "links":[]}
+        self.name_dict = {"joints":[], "links":[]} # dictionary holding the names of the generated urdf elements
         self.env_num = env_num
         self.edge_list = []
+        self.gui_on = gui_on
 
     def min_da(self):
+        """
+        calculates the minimum attraction distance necessary to allow tree generation
+        """
         min_da = None
         for point in self.att_pts:
             if min_da is None:
@@ -70,35 +82,39 @@ class TreeGenerator(object):
 
 
     def initialize_closest_tp_list(self):
+        """
+        initializes the list holding the closest tp for each ap. In the beginning that is always tp0
+        :return: initialized list of point_index-distance tuples
+        """
         closest_tp = []
         for ap in self.att_pts:
             closest_tp.append((0,np.linalg.norm(ap-[0,0,0])))
         return closest_tp
 
     def update_closest_tp_list(self, new_points, point_index):
+        """
+        :param new_points: list of newly generated points as cartesian coordinates
+        :param point_index: first index of the newly generated points
+        """
         to_delete = []
         for new_point in new_points:
-            ap_index = 0
+            ap_index = 0 # running index to reference attraction points
             for ap in self.att_pts:
-                if np.linalg.norm(ap-new_point) < self.closest_tp[ap_index][1]:
-                    if np.linalg.norm(ap-new_point) <= self.dt:
-                        #print("deleted")
-                        to_delete.append(ap_index)
+                if np.linalg.norm(ap-new_point) < self.closest_tp[ap_index][1]: #check if a newly generated point is closer to given attraction point than the closest 'old' tree point
+                    if np.linalg.norm(ap-new_point) <= self.dt: # if so check if new point is within termination range
+                        to_delete.append(ap_index) # if so then mark attraction point to be deleted
                     else:
-                        self.closest_tp[ap_index] = (point_index, np.linalg.norm(ap-new_point))
+                        self.closest_tp[ap_index] = (point_index, np.linalg.norm(ap-new_point)) # if no deletion took place update the closest tp list
                 ap_index += 1
-            point_index += 1
+            point_index += 1 # increase the point index to move on to next point
 
-        deleted=0
-        to_delete = list(set(to_delete))
-        to_delete.sort()
+        deleted=0 # term to adjust for index shifting
+        to_delete = list(set(to_delete)) # Remove duplicates in delete list
+        to_delete.sort() # order delete list. this way we delete the small indices first, allowing us to easily adjust delete indices
         for ap_index in to_delete:
-            self.att_pts = np.delete(self.att_pts, ap_index-deleted, 0)
-            self.closest_tp.pop(ap_index-deleted)
+            self.att_pts = np.delete(self.att_pts, ap_index-deleted, 0) # delete attraction point. adjust delete index by the number of already deleted lower indices
+            self.closest_tp.pop(ap_index-deleted) # delete entry in closest_tp list. adjust delete index by the number of already deleted lower indices
             deleted+=1
-
-        #print("att_pts \t\t" + str(len(self.att_pts)))
-        #print("closest_tp  \t" + str(len(self.closest_tp)))
 
     @staticmethod
     def initialize_att_pts(att_pts_max, att_pts_min, att_env_shape_funct, scaling, offset):
@@ -117,67 +133,84 @@ class TreeGenerator(object):
         """
         ret_pts = [[]]
         initial = True
-        while len(ret_pts)/3 + BATCH_SIZE < att_pts_max and len(ret_pts)/3 < att_pts_min:
-            rng = np.random.default_rng()
-            pts = rng.random((BATCH_SIZE,3))
+        while len(ret_pts)/3 + BATCH_SIZE < att_pts_max and len(ret_pts)/3 < att_pts_min: # repeat until we generated a total number of points larger than the minimum att_pts number and smaller than the maximum number
+            rng = np.random.default_rng() # setup rng
+            pts = rng.random((BATCH_SIZE,3)) # generate a batch of random points
             for pt in pts:
-                if att_env_shape_funct(pt):
+                if att_env_shape_funct(pt): # check if the given point is within the attraction point envelope. If so add it to the ap array
                     if initial:
-                        ret_pts = (pt+offset)*scaling
+                        ret_pts = (pt+offset)*scaling # offset and scaling is applied
                         initial = False
                     else:
-                        ret_pts = np.concatenate((ret_pts, (pt+offset)*scaling), axis=0)
+                        ret_pts = np.concatenate((ret_pts, (pt+offset)*scaling), axis=0) # offset and scaling is applied
         ret_pts = np.reshape(ret_pts, (int(len(ret_pts)/3),3))
         return ret_pts
 
     def generate_sv_sets(self):
+        """
+        generates a dictionary containing lists of attraction points attracting a given tree point. keys:tree point index, value:list of attraction points
+        :returns: dictionary of attraction point lists. key: tree point index, value: list of attraction point indices
+        """
         sv_sets = {}
-        ap_index = 0
-        for candidate in self.closest_tp:
+        ap_index = 0 # running attraction point index used to reference the ap's
+        for candidate in self.closest_tp: #only tree points that are closest to at least one attraction point and therefore in the closest_tp list need to be considered
             if candidate[1] <= self.da:
-                if candidate[0] not in sv_sets.keys():
+                if candidate[0] not in sv_sets.keys(): # if we encounter an entirely new tp index, add a dictionary entry
                     sv_sets[candidate[0]] = [ap_index]
                 else:
-                    sv_sets[candidate[0]].append(ap_index)
+                    sv_sets[candidate[0]].append(ap_index) # otherwise add the attraction point to the list of ap's
             ap_index += 1
         return sv_sets
 
     def generate_tree(self):
-        #self.tree_points = np.array([[0,0,0],[0,0,1],[0,0.25,2],[0,0.2,2],[0,0.3,2],[0,0.15,2],[0,0.1,2],[0,0.05,2], [0,0,2],[0,0.35,2],[0,0.4,2],[0,0.5,2],[0,0.45,2]])
-        #self.edges = {0:[1],1:[2,3,4,5,6,7,8,9,10,11,12]} #1:[2,3,4,5,6,7,8,9,10,11,12]
-        #return self.tree_points
+        """
+        main function for generating tree points. Generates tree points, until either no attraction points remain, a
+        maximum number of point generation rounds is reached or ideally until the expected number of tree points was
+        generated.
+        :return: list of tree points.
+        """
         i = 0
         while len(self.att_pts) >= 1 and i < self.max_steps and len(self.tree_points) < self.max_tree_points:
-            sv_sets = self.generate_sv_sets()
-            new_tps = []
-            point_index = len(self.tree_points)
+            sv_sets = self.generate_sv_sets() # generate the attraction point sets, that are in play this round
+            new_tps = [] # list of tree points to be generated this round as list of xyz coordinates
+            point_index = len(self.tree_points) # point index is assigned as highest index so far +1
             for key in sv_sets.keys():
-                new_tps.append(self.generate_new_point(key, sv_sets[key]))
-                if len(self.tree_points) > self.max_tree_points:
+                new_tps.append(self.generate_new_point(key, sv_sets[key])) # generate new tree point. self.edges and self.tree_points is updated in this function
+                if len(self.tree_points) > self.max_tree_points: # stop immediately after the max number of tree points was reaches
                     break
-            self.update_closest_tp_list(new_tps, point_index)
-            self.step_width = self.step_width * self.step_width_scaling
+            self.update_closest_tp_list(new_tps, point_index) # update the closest tp list
+            self.step_width = self.step_width * self.step_width_scaling # reduce step width
             i += 1
-        return self.tree_points
+        return self.tree_points # return tree points
 
     def generate_new_point(self, tp_index, sv_set):
-        active_att_pts = self.att_pts[sv_set]
-        tp = self.tree_points[tp_index]
+        """
+        function that generates one new tree point with the help of the parent index and the set of active attraction points
+        :param tp_index: index of the parent of the tree point to be generated
+        :param sv_set: list of attraction points as indices
+        :return:
+        """
+        active_att_pts = self.att_pts[sv_set] # retrieve coordinates of attraction points (list indexing)
+        tp = self.tree_points[tp_index] # retrieve xyz coordinates of parent
         vec = np.array([0,0,0])
         for ap in active_att_pts:
-            tmp = (ap - tp)/np.linalg.norm((ap - tp))
-            vec = vec + tmp
-        vec = vec/np.linalg.norm(vec)
-        new_tp = tp + self.step_width*vec
+            tmp = (ap - tp)/np.linalg.norm((ap - tp)) # normalized vector between given attraction point and parent
+            vec = vec + tmp # sum all tmp vectors
+        vec = vec/np.linalg.norm(vec) # normalize result
+        new_tp = tp + self.step_width*vec # see formula for SCA point generation
 
-        self.tree_points = np.vstack((self.tree_points, new_tp))
-        if tp_index in self.edges.keys():
+        self.tree_points = np.vstack((self.tree_points, new_tp)) # add new tree point
+        if tp_index in self.edges.keys(): # add edge
             self.edges[tp_index] = np.append(self.edges[tp_index], (len(self.tree_points) - 1))
         else:
             self.edges[tp_index] = np.array([(len(self.tree_points) - 1)])
-        return new_tp
+        return new_tp # return xyz coordinates of new tree point
 
     def find_leaves(self):
+        """
+        utility function for finding nodes without children
+        returns: list of leaf indices
+        """
         tree_node_indices = range(0,len(self.tree_points)-1)
         leaves = []
         for index in tree_node_indices:
@@ -186,43 +219,66 @@ class TreeGenerator(object):
         return leaves
 
     def find_parent(self, node):
+        """
+        utility function for finding parent of given node. If no parent exists (root node) this function returns None
+        :param node: index of node we want to find the parent of
+        :return: index of parent or None if no parent exists
+        """
         for key in self.edges.keys():
             if node in self.edges[key]:
                 return key
         return None
 
     def find_children(self, node):
+        """
+        utility funtction to find the children of a node. If no children exist returns an empty list
+        :param node: index of node we want to find children of
+        :return: list of child indices (might be empty)
+        """
         if node in self.edges.keys():
             return self.edges[node]
         else:
             return []
 
     def calculate_branch_thickness(self):
+        """
+        wrapper function that starts recursive branch radius assignment
+        """
         self.assign_thickness(0)
 
     def assign_thickness(self, node_id):
+        """
+        recursively adds the branch radius of given node and all of its decendants.
+        :param node_id: index of the node that we want to assign a radius to
+        """
         children = self.find_children(node_id)
         parent = self.find_parent(node_id)
-        diameter = 0
-        if len(children) == 0:
+        radius = 0
+        if len(children) == 0: # if no children are found assign tip thickness to edge between parent and given node. recursion break condition
             if parent is not None:
                 for child_index in range(0, len(self.edges[parent])):
-                    if self.edges[parent][child_index] == node_id:
+                    if self.edges[parent][child_index] == node_id: # once we found the correct edge, assign radius
                         self.branch_thickness_dict[node_id] = self.tip_radius
-                        diameter = self.tip_radius
+                        radius = self.tip_radius
                         break
         else:
-            for child in children:
-                diameter += self.assign_thickness(child)**self.pipe_model_exponent
-            diameter = diameter**(1/self.pipe_model_exponent)
-            if parent is not None:
+            for child in children: # assign radius recursively for every child
+                radius += self.assign_thickness(child)**self.pipe_model_exponent # take the results to the power of pipe_model_exponent and sum them
+            radius = radius**(1/self.pipe_model_exponent) # take the nth root of the result where n is the pipe_model_exponent
+            if parent is not None: # assign the result to the corresponding edge
                 for child_index in range(0,len(self.edges[parent])):
                     if self.edges[parent][child_index] == node_id:
-                        self.branch_thickness_dict[node_id] = diameter
+                        self.branch_thickness_dict[node_id] = radius
                         break
-        return diameter
+        return radius # return calculated radius for recursive calculation
 
     def generate_urdf(self):
+        """
+        main function to generate the urdf with. calls all other urdf creation functions
+        :returns name_dict: dictionary of all relevant names (links and joints). keys: 'links' and 'joints', values: lists of names
+        :returns edge_list: list of index tuples. Indices correspond with name dictionary lists
+        :returns urdf_path: the path to the generated urdf file
+        """
         urdf = minidom.Document()
         robot = urdf.createElement('robot')
         robot.setAttribute('name', "tree%s"%self.tree_id)
@@ -246,6 +302,10 @@ class TreeGenerator(object):
 
     def clean_edge_list(self):
         for parent, child in self.edge_list:
+            """
+            removes all instances of string parents in the edge list. Translates them to index of parent string. String
+            parents can occur when temporarily adding "dirty edges" at time of edge list generation. 
+            """
             if isinstance(parent, str):
                 print("removed (%s, %s)"%(parent, child))
                 self.edge_list.remove((parent,child))
@@ -255,6 +315,9 @@ class TreeGenerator(object):
 
 
     def generate_color_definitions(self, urdf, robot):
+        """
+        generates color definition section of urdf
+        """
         for name, rgba in [("blue", "0 0 0.8 1"), ("green", "0 0.6 0 0.8"), ("brown", "0.3 0.15 0.05 1.0")]:
             material = urdf.createElement('material')
             material.setAttribute('name', name)
@@ -264,6 +327,11 @@ class TreeGenerator(object):
             material.appendChild(color)
 
     def add_limits(self, urdf, parent):
+        """
+        adds limits to urdf element
+        :param urdf: the urdf instance
+        :param parent: the parent that section is added to
+        """
         limit1 = urdf.createElement('limit')
         limit1.setAttribute('lower', '-3.1416')
         limit1.setAttribute('upper', '3.1416')
@@ -279,11 +347,21 @@ class TreeGenerator(object):
         parent.appendChild(limit2)
 
     def add_dynamics(self, urdf, parent):
+        """
+        adds dynamics to urdf element
+        :param urdf: the urdf instance
+        :param parent: the parent that section is added to
+        """
         dynamics = urdf.createElement('dynamics')
         dynamics.setAttribute('damping', '10.0')
         parent.appendChild(dynamics)
 
     def add_safety_controller(self, urdf, parent):
+        """
+        adds safety controller to urdf element
+        :param urdf: the urdf instance
+        :param parent: the parent that section is added to
+        """
         safety_controller = urdf.createElement('safety_controller')
         safety_controller.setAttribute('k_position', '100.0')
         safety_controller.setAttribute('k_velocity', '40.0')
@@ -292,6 +370,11 @@ class TreeGenerator(object):
         parent.appendChild(safety_controller)
 
     def add_inertia(self, urdf, parent):
+        """
+        adds inertia to urdf element
+        :param urdf: the urdf instance
+        :param parent: the parent that section is added to
+        """
         inertia = urdf.createElement('inertia')
         inertia.setAttribute('ixx', '0.001')
         inertia.setAttribute('ixy', '0')
@@ -302,17 +385,34 @@ class TreeGenerator(object):
         parent.appendChild(inertia)
 
     def add_mass(self, urdf, parent):
+        """
+        adds mass to urdf element
+        :param urdf: the urdf instance
+        :param parent: the parent that section is added to
+        """
         mass = urdf.createElement('mass')
         mass.setAttribute('value', '0.001')
         parent.appendChild(mass)
 
     def add_inertial(self, urdf, parent):
+        """
+        adds inertial to urdf element
+        :param urdf: the urdf instance
+        :param parent: the parent that section is added to
+        """
         inertial = urdf.createElement('inertial')
         self.add_mass(urdf, inertial)
         self.add_inertia(urdf, inertial)
         parent.appendChild(inertial)
 
     def generate_spherical_joint(self, urdf, robot, tree_node, children):
+        """
+        urdf generation: generates all sperical joints that have a given tree node as parent
+        :param urdf: urdf instance
+        :param robot: urdf robot element we are working on
+        :param tree_node: the tree node we want to generate joints for. given as index
+        :param children: the children of the given tree node
+        """
         jointbase = None
         joint_one_offset = [0,0,0.01]
         parent = self.find_parent(tree_node)
@@ -485,6 +585,13 @@ class TreeGenerator(object):
             robot.appendChild(jointz)
 
     def generate_link(self, urdf, robot, parent, child):
+        """
+        urdf generation: generates a link between parent and child
+        :param urdf: urdf instance
+        :param robot: urdf robot element we are working on
+        :param parent: id of the parent element (int)
+        :param child: id of the child element (int)
+        """
         xyz_offset = (self.tree_points[child] - self.tree_points[parent])
         link_length = np.linalg.norm(xyz_offset)
         xyz_offset = xyz_offset/2
@@ -531,29 +638,47 @@ class TreeGenerator(object):
         robot.appendChild(link)
 
     def add_origin(self, urdf, parent, xyz_offset, rpy_rotations):
+        """
+        adds origin segment to a given element
+        :param urdf: urdf instance we are working on
+        :param parent: element we are adding the origin section to
+        :param xyz_offset: list of xyz coordinates representing the offset
+        :param rpy_rotations: list of roll pitch and yaw values representing the elements rotation
+        """
         origin = urdf.createElement('origin')
         origin.setAttribute('xyz', '%s %s %s' % (xyz_offset[0], xyz_offset[1], xyz_offset[2]))
         origin.setAttribute('rpy', '%s %s %s' % (rpy_rotations[0], rpy_rotations[1], rpy_rotations[2]))
         parent.appendChild(origin)
 
     def add_geometry_cylinder(self, urdf, parent, cylinder_radius, link_length):
+        """
+        adds the geometric section for a cylinder to a given parent element
+        :param urdf: the urdf instance we are working on
+        :param parent: the parent element we want to add the geometry section to
+        :param cylinder_radius: radius of the cylinder
+        :param link_length: length of the cylinder
+        """
         geometry = urdf.createElement('geometry')
         cylinder = urdf.createElement('cylinder')
-        cylinder.setAttribute('radius', '%s' % (cylinder_radius*self.tip_radius))
+        cylinder.setAttribute('radius', '%s' % (cylinder_radius)) #*self.tip_radius <- why was that here?
         cylinder.setAttribute('length', '%s' % link_length)
         geometry.appendChild(cylinder)
         parent.appendChild(geometry)
 
-    # CURRENT THEORY: Isaacgym interprets the rpy rotations as rotation around the GLOBAL x y and z axis
     def calculate_rpy(self, parent, child):
-        #Z_tmp = np.array([self.tree_points[child][1], self.tree_points[child][0], self.tree_points[child][2]]) - np.array([self.tree_points[parent][1], self.tree_points[parent][0], self.tree_points[parent][2]]) 
+        """
+        calulates the rpy needed to orient a link to go from parent to child
+        :param parent: tree point index of the parent
+        :param child: tree point index of the child
+        :returns: list of rpy (in that order) values
+        """
         Z_tmp = self.tree_points[child] - self.tree_points[parent]
         Z = Z_tmp/np.linalg.norm(Z_tmp)
 
         if Z[2] == 1 and Z[1] == 0 and Z[0] == 0:
             X = np.array([1,0,0])
         else:
-            X_tmp = np.cross(Z, np.array([0,0,1])) #np.array([-Z[1]/Z[2], 1, 0])
+            X_tmp = np.cross(Z, np.array([0,0,1]))
             X = X_tmp/np.linalg.norm(X_tmp)
 
         Y_tmp = np.cross(Z, X)
@@ -561,129 +686,22 @@ class TreeGenerator(object):
 
         R = np.vstack((X,Y,Z))
         R = np.transpose(R)
-        #print(R)
-        #print(R[2][0])
 
         rot = Rotation.from_matrix(R)
         rot_eul = rot.as_euler("xyz")
 
-        #print(rot_eul)
-
-        #p = np.arcsin(-R[2][0])
-        #r = np.arcsin(R[2][1]/np.cos(p))
-        #y = np.arcsin(R[1][0]/np.cos(p))
-
-        #theta = np.arccos((np.trace(R)-1)/2)
-
-        #if np.sin(theta) != 0:
-        #    p = -((Y[2]-Z[1])/2*np.sin(theta))*theta
-        #    y = ((Z[0]-X[2])/2*np.sin(theta))*theta
-        #    r = -((X[1]-Y[0])/2*np.sin(theta))*theta
-        #else:
-        #    r = 0
-        #    p = 0
-        #    y = 0
-
-        # X-Z-Y 
-        #r = np.arctan2(Y[2], Y[1])
-        #y = np.arctan2(-Y[0], np.sqrt(1-Y[0]**2)) #np.arcsin(-Y[0])
-        #p = np.arctan2(Z[0], X[0])
-
-        # X-Y-Z (Incorrect order)
-        #r = np.arctan2(-Z[1], Z[2])
-        #y = np.arctan2(Z[0], np.sqrt(1-Z[0]**2)) #np.arcsin(Z[0])
-        #p = np.arctan2(-Y[0], X[0])
-
-        # Y-X-Z (Incorrect order)
-        #r = np.arctan2(Z[0], Z[2])
-        #y = np.arctan2(-Z[1], np.sqrt(1-Z[1]**2)) #np.arcsin(-Z[1])
-        #p = np.arctan2(X[1], Y[1])
-
-        # Y-Z-X
-        #r = np.arctan2(-X[2], X[0])
-        #y = np.arctan2(X[1], np.sqrt(1-X[1]**2)) #np.arcsin(X[1])
-        #p = np.arctan2(-Z[1], Y[1])
-
-        # Z-Y-X
-        #r = np.arctan2(X[1], X[0])
-        #y = np.arctan2(-X[2], np.sqrt(1-X[2]**2)) #np.arcsin(-X[2])
-        #p = np.arctan2(Y[2], Z[2])
-
-        # Z-X-Y
-        #r = np.arctan2(-Y[0], Y[1])
-        #y = np.arctan2(Y[2], np.sqrt(1-Y[2]**2)) #np.arcsin(Y[2])
-        #p = np.arctan2(-X[2], Z[2])
-
-        # X-Z-X
-        #r = np.arctan2(X[2], X[1])
-        #y = np.arctan2(np.sqrt(1-X[0]**2), X[0])
-        #p = np.arctan2(Z[0], -Y[0])
-
-        # X-Y-X
-        #r = np.arctan2(X[1], -X[2])
-        #y = np.arctan2(np.sqrt(1-X[0]**2), X[0])
-        #p = np.arctan2(Y[0], Z[0])
-
-        # Y-X-Y
-        #r = np.arctan2(Y[0], Y[2])
-        #y = np.arctan2(np.sqrt(1-Y[1]**2), Y[1])
-        #p = np.arctan2(X[1], -Y[2])
-
-        # Y-Z-Y
-        #r = np.arctan2(Y[2], -Y[0])
-        #y = np.arctan2(np.sqrt(1-Y[1]**2), Y[1])
-        #p = np.arctan2(Z[1], X[1])
-
-        # Z-Y-Z
-        #r = np.arctan2(Z[1], Z[0])ww
-        #y = np.arctan2(np.sqrt(1-Z[2]**2), Z[2])
-        #p = np.arctan2(Y[2], -X[2])
-
-        # Z-X-Z
-        #r = np.arctan2(Z[0], -Z[1])
-        #y = np.arctan2(np.sqrt(1-Z[2]**2), Z[2])
-        #p = np.arctan2(X[2], Y[2])
-
-        #offsets = self.tree_points[child] - self.tree_points[parent]
-        #offsets = offsets/2
-        #if offsets[2] < 0:
-        #    if offsets[0] < 0:
-        #        r = - (self.calculate_angle(offsets[1], np.linalg.norm(offsets)) - np.pi/2)
-        #        p = - self.calculate_angle(offsets[0], np.linalg.norm(offsets))
-        #        y = 0
-        #    else:
-        #        r = - (self.calculate_angle(offsets[1], np.linalg.norm(offsets)) + np.pi/2) 
-        #        p = - self.calculate_angle(offsets[0], np.linalg.norm(offsets))
-        #        y = 0
-        #else:
-        #    r = -self.calculate_angle(offsets[1], np.linalg.norm(offsets))
-        #    p = self.calculate_angle(offsets[0], np.linalg.norm(offsets))
-        #    y = 0
         r = rot_eul[0]
         p = rot_eul[1]
         y = rot_eul[2]
 
         return [r,p,y]
-        #return [r,p,-y]
-        #return [r,-p,y]
-        #return [r,-p,-y]
-        #return [-r,p,y]
-        #return [-r,p,-y]
-        #return [-r,-p,y]
-        #return [-r,-p,-y]
-
-    def calculate_angle(self, delta, dist):
-        rot_vec = 0
-        if dist != 0:
-            rot_vec = np.arcsin(delta/dist)
-        #    if offsets[0] < 0:
-        #        if offsets[1] > 0:
-        #            rot_vec = rot_vec - np.pi/2
-        #        else:
-        #            rot_vec += np.pi/2
-        return rot_vec
 
     def generate_ground(self, urdf, robot):
+        """
+        adds ground section to urdf
+        :param urdf: urdf instance we are working on
+        :param robot: robot section that ground is added to
+        """
         link = urdf.createElement('link')
         link.setAttribute('name', 'base_link')
         robot.appendChild(link)
@@ -718,6 +736,9 @@ class TreeGenerator(object):
         collision.appendChild(geometryc)
 
     def calc_edge_tuples(self):
+        """
+        makes a list of edge tuples out of the edges dictionary
+        """
         edge_tuples = []
         for parent in self.edges.keys():
             for child in self.edges[parent]:
@@ -726,11 +747,17 @@ class TreeGenerator(object):
 
     # has to be executed after the urdf was created
     def generate_yaml(self):
+        """
+        generates the yaml file for the generated tree. Has to be executed after the urdf was created
+        :returns path: path to the yaml file
+        :returns stiffness list: list of stiffness values for all joints
+        :returns damping list: list of damping values for all joints
+        """
         file_object = {}
         file_object["scene"] = {}
         file_object["scene"]["n_envs"] = self.env_num
         file_object["scene"]["es"] = 1
-        file_object["scene"]["gui"] = GUI_ON
+        file_object["scene"]["gui"] = self.gui_on
 
         file_object["scene"]["cam"] = {}
         file_object["scene"]["cam"]["cam_pos"] = [5, 0, 5]
@@ -786,15 +813,11 @@ class TreeGenerator(object):
             joint_idx = int(name_lst[0][5:])
             child_idx = int(name_lst[-1])
             parent = self.find_parent(joint_idx)
-            
-            length = np.linalg.norm(self.tree_points[child_idx] - self.tree_points[joint_idx])
-            #print("lenght for node %s: %s"%(joint_idx,length))
 
             thickness = self.branch_thickness_dict[child_idx]*2 #use thickness of outgoing edge for stiffness calc
 
-            stiffness_factor = thickness**4 #/(length**3) # <-- lenght factor should be taken care of by physical simulation from isaacgym
+            stiffness_factor = thickness**4
             stiffness = STIFFNESS_BASE * stiffness_factor
-            #print(stiffness)
             stiffness_list.append(stiffness)
 
         damping_list = [25] * (len(self.name_dict["joints"])) 

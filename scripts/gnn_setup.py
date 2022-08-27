@@ -25,15 +25,8 @@ import math
 import GPUtil
 from torch_geometric_temporal import GConvLSTM
 
-DATASET_DIR = "/mnt/hdd/jan-malte/8Nodes_new_by_tree/"
-TREE_NUM = 25
-TREE_START = 0
-N_GRAPH_NODES = 8
-N_EPOCHS = 10
-NODE_TRANSFORM = True
-SCHED_PATIENCE = 10
-TIP_THICKNESS = 0.01
-TREE_PTS = [8,10]
+TIP_THICKNESS = 0.01 #tip radius for branch radius reconstruction.
+TREE_PTS = [8,10] #list of tree points to search for in prefixes. admissable tree sizes
 
 #seed = 0
 #np.random.seed(seed)
@@ -67,6 +60,7 @@ class FGCNResidualBlock(torch.nn.Module):
         x = self.do(x)
         return x
 
+# TODO: Does not really work. still in development
 class GConvLSTMBlock(torch.nn.Module):
     def __init__(self, hidden_size, p):
         super().__init__()
@@ -81,6 +75,7 @@ class GConvLSTMBlock(torch.nn.Module):
         x = self.do(x)
         return x, new_c
 
+# TODO: Does not really work. still in development
 class FGCNRec(torch.nn.Module):
     def __init__(self, n_layers, in_size, out_size, hidden_size=1280):
         super().__init__()
@@ -116,7 +111,10 @@ class FGCNRec(torch.nn.Module):
         x = self.out(x)        
         return x
 
-class FGCN(torch.nn.Module): 
+class FGCN(torch.nn.Module):
+    """
+    flexibele GCN. allows for adjustable number of layers by setting n_graph_nodes
+    """
     def __init__(self, n_graph_nodes, in_size, out_size, hidden_size=1280):
         super().__init__()
         #hidden_size = 1280 
@@ -206,6 +204,9 @@ class GCN(torch.nn.Module):
         return x
 
 class QuatLoss(torch.nn.Module):
+    """
+    quaternion loss function
+    """
     def __init__(self):
         super().__init__()
         #self.mse = torch.nn.MSELoss()
@@ -298,7 +299,7 @@ def train(model, optimizer, criterion, train_loader, epoch, device, out_size, pr
         optimizer.zero_grad()
         batch.to(device)
         out = model(batch)
-        if profile == 3 or profile == 4 or profile == 5: # if we learn orientation
+        if profile == 3 or profile == 4 or profile == 5: # if we learn orientation we handle input into criterion fuction differently, since we have different expectations
             out_end = 3 + out_size
             loss = criterion(out[:,:], batch.y[:,3:out_end]) # assumes that xyz are the first 3 dimensions of y
         else:
@@ -315,6 +316,9 @@ def first_value(e):
     return e[0]
 
 def print_loss_by_tree(base, val):
+    """
+    generates a scatter plot with base displacement and prediction error as its dimenstion. Each point is one push prediction
+    """
     zipped = list(zip(base, val))
     zipped.sort(key=first_value) 
 
@@ -339,7 +343,7 @@ def validate(model, criterion, val_loader, epoch, device, profile, out_size):
     num_graphs = 0
     base_loss_by_tree_list = []
     val_loss_by_tree_list = []
-    ori_end = 3 + out_size
+    ori_end = 3 + out_size # last index of the orientation segment of each incoming datapoint
 
     for batch in val_loader:
         batch.to(device)
@@ -433,7 +437,6 @@ def reconstruct_positional_data(rotations, edges, init_pos, rpy=False):
         len_idx = 6
         rotations = np.reshape(rotations,(-1,3))
         rotations = rot_from_rpy(rotations) # if we get rotations in rpy transform them into quaternion
-    #edges = edges.detach().cpu().numpy()
     new_out = [[0,0,0]]*len(init_pos)
     help_edges = []
     for idx, _ in enumerate(edges[0]):
@@ -472,7 +475,6 @@ def test(model, test_loader, device, profile, out_size):
     idx = 0
     ori_end = 3+out_size
     for batch in test_loader:
-        #GPUtil.showUtilization()
         root_dist_dict = generate_root_distance_dict(batch.edge_index.detach().cpu().numpy().T)
         batch.to(device)
         with torch.no_grad():
@@ -524,7 +526,6 @@ def test(model, test_loader, device, profile, out_size):
                             batch.edge_index, batch.force_node[0], 
                             force, results_path+"prediction_example%s"%idx)
         idx += 1  
-        #print("#####################################")
 
     l2_norm_by_node = []
     l2_norm_base_by_node = []
@@ -540,8 +541,6 @@ def test(model, test_loader, device, profile, out_size):
         l2_std_dev_by_node.append(calc_variance(l2_norm_by_node[root_dist], running_l2_norm_by_root_dist[root_dist])**(1/2))
         l2_std_dev_base_by_node.append(calc_variance(l2_norm_base_by_node[root_dist], running_l2_base_by_root_dist[root_dist])**(1/2))
 
-    #fig = plt.figure()
-    #ax = fig.add_subplot(111)
 
     X_axis = np.arange(len(root_dists))
 
@@ -554,16 +553,8 @@ def test(model, test_loader, device, profile, out_size):
     plt.title("error by distance to root node")
     plt.legend()
 
-    #ax.bar(root_dists, l2_norm_by_node, yerr=l2_std_dev_by_node)
     plt.savefig(results_path+"error_by_node")
     plt.close()
-    #plt.show() 
-
-    #fig = plt.figure()
-    #ax = fig.add_subplot(111)
-    #ax.bar(root_dists, l2_norm_base_by_node, yerr=l2_std_dev_base_by_node)
-    #plt.savefig(results_path+"base_by_node")
-    #plt.show()
 
     l2_norm = running_l2_norm/num_graphs
     l2_base = running_l2_norm_base/num_graphs
@@ -659,7 +650,6 @@ def visualize_graph(X, Y, X_0, edge_index, force_node, force, name):
     plt.tight_layout()
     plt.savefig(name)
     plt.close()
-    #plt.show() 
 
 def make_gif(X, Y, X_0, edge_index, force_node, force, id):
     force = force.detach().cpu().numpy()
@@ -683,7 +673,6 @@ def make_gif(X, Y, X_0, edge_index, force_node, force, id):
 
     fig = plt.figure()
     ax = Axes3D(fig)
-    #ax = plt.figure().add_subplot(projection='3d')
     fn = X_0[force_node].detach().cpu().numpy()
     ax.scatter(fn[0], fn[1], fn[2], c='m', s=50)
     x0_lc = Line3DCollection(x_0, colors=[0,0,1,1], linewidths=1)
@@ -1019,12 +1008,6 @@ def load_npy(data_dir, tree_num, orientational, prefix):
         X_pos = np.load(os.path.join(data_dir, prefix + 'X_vertex_init_tree%s_ori.npy'%tree_num))
         Y_pos = np.load(os.path.join(data_dir, prefix + 'Y_vertex_final_tree%s_ori.npy'%tree_num))
     else:
-        #X_stiffness_damping = np.load(os.path.join(data_dir, 'X_coeff_stiff_damp_tree%s.npy'%tree_num))
-        #X_edges = np.load(os.path.join(data_dir, 'X_edge_def_tree%s.npy'%tree_num))
-        #X_force = np.load(os.path.join(data_dir, 'X_force_applied_tree%s_clean.npy'%tree_num))
-        #X_pos = np.load(os.path.join(data_dir, 'X_vertex_init_tree%s_clean.npy'%tree_num))
-        #Y_pos = np.load(os.path.join(data_dir, 'Y_vertex_final_tree%s_clean.npy'%tree_num))
-
         X_stiffness_damping = np.load(os.path.join(data_dir, prefix + 'X_coeff_stiff_damp_tree%s.npy'%tree_num))
         X_edges = np.load(os.path.join(data_dir, prefix + 'X_edge_def_tree%s.npy'%tree_num))
         X_force = np.load(os.path.join(data_dir, prefix + 'X_force_applied_tree%s.npy'%tree_num))
@@ -1333,7 +1316,6 @@ def get_dataset_metrics(dataset, suffix):
         avg_displacement_per_node = np.sum(np.linalg.norm(tree_graph_push.x.numpy()[:,:3] - tree_graph_push.y.numpy()[:,:3], axis=1))/len(tree_graph_push.x)
         avg_displacements_per_node.append(avg_displacement_per_node)
     column_diag_dict = {}
-    #offset = 0.01
     for displacement in avg_displacements_per_node:
         if round(displacement, 2) in column_diag_dict.keys():
             column_diag_dict[round(displacement, 2)] += 1
@@ -1361,7 +1343,7 @@ def get_dataset_metrics(dataset, suffix):
 ##### FUNCTION DEF END #####
 
 parser = argparse.ArgumentParser()
-parser.add_argument("-dir", type=str, dest="file_directory", help="directory in which the dataset files are located")
+parser.add_argument("-dir", type=str, dest="file_directory", help="directory in which the dataset files are located", default="/mnt/hdd/jan-malte/8Nodes_new_by_tree/")
 parser.add_argument("-id", type=str, dest="id", help="id to identify the results folder")
 parser.add_argument("-gn", type=int, default=10, dest="graph_nodes", help="number of layers the GCN will have") #number of graph nodes
 parser.add_argument("-ep", type=int, default=500, dest="n_epochs", help="number of epochs to run") # number of epochs
@@ -1375,10 +1357,6 @@ parser.add_argument("-hidden_size", type=int, default=-1, dest="hidden_size", he
 parser.add_argument("-sep_test", type=int, default=1, dest="sep_test", help="set to 0 when we test on the same dataset that provided weights were trained on")
 
 parser.add_argument("-profile", type=int, default=0, choices=[0,1,2,3,4,5,6], dest="profile")
-#parser.add_argument("-ori", type=bool, default=False, dest="orientational", help="wether or not we use directional mode (only predict directional information)")
-#parser.add_argument("-rpy", type=bool, default=False, dest="rpy", help="if true we use rpy for rotations not quaternion")
-#parser.add_argument("-ath", type=bool, default=False, dest="add_thickness", help="wether or not to add branch thickness")
-#parser.add_argument("-nt", type=bool, default=False, dest="node_transform", help="wether or not we transform the graph to tree node representation") # if node transform should be performed
 
 args = parser.parse_args()
 
@@ -1431,9 +1409,7 @@ print("[%s] done"%datetime.datetime.now())
 
 # Loading Datase
 print("[%s] loading data"%datetime.datetime.now())
-d = DATASET_DIR
-if args.file_directory is not None:
-    d = args.file_directory 
+d = args.file_directory
 
 dataset = []
 val_dataset = []
@@ -1476,15 +1452,14 @@ for tree_pt in TREE_PTS:
 
 print("[%s] done"%datetime.datetime.now())
 print("[%s] generating dataset metrics"%datetime.datetime.now())
-get_dataset_metrics(dataset, "train") # TODO: figure out, why this wont save the generated plot ...
+get_dataset_metrics(dataset, "train")
 if topology_break:
-    get_dataset_metrics(val_dataset, "val") # TODO: ... but this will
+    get_dataset_metrics(val_dataset, "val")
 # Shuffle Dataset
 #X_force_arr, X_pos_arr, Y_pos_arr = shuffle_in_unison(X_force_arr, X_pos_arr, Y_pos_arr)
 print("[%s] done"%datetime.datetime.now())
 
 print("[%s] printing example trees"%datetime.datetime.now())
-#i = 53
 for _ in range(10):
     i = random.randint(0, len(dataset))
     print(len(dataset))
@@ -1500,11 +1475,8 @@ for _ in range(10):
         print(np.around(dataset[i].y[:,3:7], 2))
         X = dataset[i].x[:,:3]
         Y = dataset[i].y[:,:3]
-    #print(val_dataset[i].y[:,:3])
     force_node = dataset[i].force_node
-    #print(force_node)
     print_edges = dataset[i].edge_index
-    #print(edge_index)
     force = dataset[i].x[:,-3:]
     #visualize_graph(X, val_dataset[i].x[:,:3], X, print_edges, force_node, force, results_path+"comp_with_self_x%s"%i)
     #visualize_graph(Y, val_dataset[i].y[:,:3], Y, print_edges, force_node, force, results_path+"comp_with_self_y%s"%i)
@@ -1523,7 +1495,7 @@ if topology_break:
     random.shuffle(val_dataset)
     print(len(val_dataset))
 
-    test_dataset = val_dataset#[:8000]
+    test_dataset = val_dataset
 else:
     print("works")
     random.shuffle(dataset)
@@ -1536,7 +1508,7 @@ else:
     
     random.shuffle(val_dataset)
     test_val_split = int(len(val_dataset))
-    test_dataset = val_dataset#[:8000]
+    test_dataset = val_dataset
 
 if args.weights is not None and args.sep_test == 1:
     print("loading full dataset")
@@ -1565,19 +1537,7 @@ train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
 val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
 test_loader = DataLoader(test_dataset, batch_size=1, shuffle=True, num_workers=0)
 
-print("[%s] done"%datetime.datetime.now())
-#check train dataset?
-#train_data = train_dataset[0]
-#print(train_data)
-#print()
-#print('Number of Graphs in Train Dataset: ', len(train_dataset))
-#print('Number of Graphs in Test Dataset: ', len(val_dataset))
-#print()
-
-# check batches
-#for batch in train_loader:
-    #print(batch)
-    #print('Number of graphs in batch: ', batch.num_graphs) 
+print("[%s] done"%datetime.datetime.now()) 
 
 # Setup GCN
 print("[%s] setting up GCN"%datetime.datetime.now())
@@ -1644,9 +1604,6 @@ if args.weights is None:
         print("[%s] epoch %s"%(datetime.datetime.now(), epoch))
 
     print("[%s] done"%datetime.datetime.now())
-    #device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    #best_model = GCN().to(device)
-    #best_model.load_state_dict(torch.load('model_173_seed0.pt'))
 
     torch.save(best_model.state_dict(), results_path+'model.pt')
 

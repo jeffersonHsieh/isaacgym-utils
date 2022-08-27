@@ -2,6 +2,12 @@ import numpy as np
 from scipy.spatial.transform import Rotation
 import os
 
+GET_PATH = "/mnt/hdd/jan-malte/10Nodes_new_test_by_tree/"
+PUT_PATH = "/mnt/hdd/jan-malte/10Nodes_new_test_by_tree/"
+TREE_NUM = 3
+TREE_PTS = 10
+TREE_START = 0
+
 def get_parent(node, edges):
     for parent, child in edges:
         if child == node:
@@ -136,52 +142,52 @@ def adjust_indexing(tuple_list, deleted_index):
         new_tuple_list.append((i,j))
     return new_tuple_list
 
-GET_PATH = "/mnt/hdd/jan-malte/10Nodes_new_test_by_tree/"
-PUT_PATH = "/mnt/hdd/jan-malte/10Nodes_new_test_by_tree/"
-TREE_NUM = 3
-TREE_PTS = 10
-TREE_START = 0
+def make_orientation(tree_start=TREE_START, tree_num=TREE_NUM, tree_pts=TREE_PTS, get_path=GET_PATH, put_path=PUT_PATH):
+    for tree in range(tree_start, tree_num):
+        prefix = "[%s]" % tree_pts
+        try:
+            checkload = np.load(get_path + prefix + 'X_coeff_stiff_damp_tree%s.npy' % (
+                tree))  # assumes full dataset present (should be true anyways)
+        except:
+            prefix = ""
 
-for tree in range(TREE_START, TREE_NUM):
-    prefix = "[%s]"%TREE_PTS
-    try:
-        checkload = np.load(GET_PATH + prefix + 'X_coeff_stiff_damp_tree%s.npy'%(tree)) #assumes full dataset present (should be true anyways)
-    except:
-        prefix = ""
+        X_edges = np.load(os.path.join(get_path, prefix + 'X_edge_def_tree%s.npy' % tree))
+        force_applied_array = np.load(os.path.join(get_path, prefix + 'X_force_applied_tree%s.npy' % tree))
+        x_vert_array = np.load(os.path.join(get_path, prefix + 'X_vertex_init_pose_tree%s.npy' % tree))
+        y_vert_array = np.load(os.path.join(get_path, prefix + 'Y_vertex_final_pos_tree%s.npy' % tree))
 
-    X_edges = np.load(os.path.join(GET_PATH, prefix + 'X_edge_def_tree%s.npy'%tree))
-    force_applied_array = np.load(os.path.join(GET_PATH, prefix + 'X_force_applied_tree%s.npy'%tree))
-    x_vert_array = np.load(os.path.join(GET_PATH, prefix + 'X_vertex_init_pose_tree%s.npy'%tree))
-    y_vert_array = np.load(os.path.join(GET_PATH, prefix + 'Y_vertex_final_pos_tree%s.npy'%tree))
+        print("######################################")
 
-    print("######################################")
+        print(np.shape(x_vert_array))
+        print(np.shape(force_applied_array))
+        print(np.shape(y_vert_array))
+        print(np.shape(X_edges))
 
-    print(np.shape(x_vert_array))
-    print(np.shape(force_applied_array))
-    print(np.shape(y_vert_array))
-    print(np.shape(X_edges))
+        x_vert_array = x_vert_array[:, :7, :].transpose((0, 2, 1))
+        y_vert_array = y_vert_array[:, :7, :].transpose((0, 2, 1))
+        force_applied_array = force_applied_array.transpose((0, 2, 1))
 
-    x_vert_array = x_vert_array[:, :7, :].transpose((0,2,1))
-    y_vert_array = y_vert_array[:, :7, :].transpose((0,2,1))
-    force_applied_array = force_applied_array.transpose((0,2,1))
+        print("--------------------------------------")
+        print(np.shape(x_vert_array))
+        print(np.shape(force_applied_array))
+        print(np.shape(y_vert_array))
+        print(np.shape(X_edges))
 
-    print("--------------------------------------")
-    print(np.shape(x_vert_array))
-    print(np.shape(force_applied_array))
-    print(np.shape(y_vert_array))
-    print(np.shape(X_edges))
+        X_edges, x_vert_array, y_vert_array, force_applied_array = calculate_orientational_data(X_edges, x_vert_array,
+                                                                                                y_vert_array,
+                                                                                                force_applied_array)
 
-    X_edges, x_vert_array, y_vert_array, force_applied_array = calculate_orientational_data(X_edges, x_vert_array, y_vert_array, force_applied_array)
+        print("--------------------------------------")
+        print(np.shape(x_vert_array))
+        print(np.shape(force_applied_array))
+        print(np.shape(y_vert_array))
+        print(np.shape(X_edges))
 
-    print("--------------------------------------")
-    print(np.shape(x_vert_array))
-    print(np.shape(force_applied_array))
-    print(np.shape(y_vert_array))
-    print(np.shape(X_edges))
+        print("######################################")
 
-    print("######################################")
+        np.save(put_path + prefix + 'X_vertex_init_tree%s_ori' % tree, x_vert_array)
+        np.save(put_path + prefix + 'X_force_applied_tree%s_ori' % tree, force_applied_array)
+        np.save(put_path + prefix + 'Y_vertex_final_tree%s_ori' % tree, y_vert_array)
+        np.save(put_path + prefix + 'X_edge_def_tree%s_ori' % tree, X_edges)
 
-    np.save(PUT_PATH + prefix + 'X_vertex_init_tree%s_ori'%tree, x_vert_array)
-    np.save(PUT_PATH + prefix + 'X_force_applied_tree%s_ori'%tree, force_applied_array )
-    np.save(PUT_PATH + prefix + 'Y_vertex_final_tree%s_ori'%tree, y_vert_array)
-    np.save(PUT_PATH + prefix + 'X_edge_def_tree%s_ori'%tree, X_edges)
+make_orientation()
