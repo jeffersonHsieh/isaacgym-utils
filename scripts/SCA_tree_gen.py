@@ -9,7 +9,7 @@ from scipy.spatial.transform import Rotation
 import yaml
 
 BATCH_SIZE = 1 # size of batches for random point generation. Lower values might speed up the process, but lead to variations in the final number of attraction points
-STIFFNESS_BASE = 11000 # factor used to calculate stiffness. 
+STIFFNESS_BASE = 220000 # factor used to calculate stiffness. 
 SIMULATION_STEP_SIZE = 0.01 # internal value for isaacgym simulation
 
 def sphere(pt, a=1.0, b=1.0, c=1.0):
@@ -820,6 +820,7 @@ class TreeGenerator(object):
             stiffness = STIFFNESS_BASE * stiffness_factor
             stiffness_list.append(stiffness)
 
+        stiffness_list[0] = stiffness_list[0] * 2
         damping_list = [25] * (len(self.name_dict["joints"])) 
         file_object["tree"]["dof_props"]["stiffness"] = stiffness_list #[30] * (len(self.name_dict["joints"])) # -len(self.tree_points)
         file_object["tree"]["dof_props"]["damping"] = damping_list # -len(self.tree_points)

@@ -190,4 +190,4 @@ def make_orientation(tree_start=TREE_START, tree_num=TREE_NUM, tree_pts=TREE_PTS
         np.save(put_path + prefix + 'Y_vertex_final_tree%s_ori' % tree, y_vert_array)
         np.save(put_path + prefix + 'X_edge_def_tree%s_ori' % tree, X_edges)
 
-make_orientation()
+#make_orientation()

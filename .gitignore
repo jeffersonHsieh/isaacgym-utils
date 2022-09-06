@@ -137,3 +137,6 @@ outs/
 
 # wandb
 scripts/wandb
+
+#data
+data/

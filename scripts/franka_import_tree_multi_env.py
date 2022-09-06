@@ -253,9 +253,20 @@ def import_tree(name_dict, urdf_path, yaml_path, edge_def, stiffness_list, dampi
                 #for idx in range(0, scene._n_envs):
                 #force random
                 while True:
-                    fx = np.random.randint(-force_magnitude,force_magnitude)
-                    fy = np.random.randint(-force_magnitude,force_magnitude)
-                    fz = np.random.randint(-force_magnitude,force_magnitude)
+                    sx = np.random.randint(0,1)
+                    fx = np.random.randint(10,30)
+                    if sx == 0:
+                        fx = -fx
+
+                    sy = np.random.randint(0,1)
+                    fy = np.random.randint(10,30)
+                    if sy == 0:
+                        fy = -fy
+
+                    sz = np.random.randint(0,1)
+                    fz = np.random.randint(10,30)
+                    if sz == 0:
+                        fz = -fz
                     if abs(fx) + abs(fy) + abs(fz) != 0:
                         break
                 

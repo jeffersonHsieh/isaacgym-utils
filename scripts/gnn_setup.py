@@ -26,7 +26,7 @@ import GPUtil
 from torch_geometric_temporal import GConvLSTM
 
 TIP_THICKNESS = 0.01 #tip radius for branch radius reconstruction.
-TREE_PTS = [8,10] #list of tree points to search for in prefixes. admissable tree sizes
+TREE_PTS = [8,10,20] #list of tree points to search for in prefixes. admissable tree sizes
 
 #seed = 0
 #np.random.seed(seed)
