@@ -23,7 +23,7 @@ import datetime
 from torch.autograd import Variable
 import math
 #import GPUtil
-from torch_geometric_temporal import GConvLSTM
+#from torch_geometric_temporal import GConvLSTM
 
 TIP_THICKNESS = 0.01 #tip radius for branch radius reconstruction.
 TREE_PTS = [8,10,20] #list of tree points to search for in prefixes. admissable tree sizes
@@ -61,6 +61,7 @@ class FGCNResidualBlock(torch.nn.Module):
         return x
 
 # TODO: Does not really work. still in development
+"""
 class GConvLSTMBlock(torch.nn.Module):
     def __init__(self, hidden_size, p):
         super().__init__()
@@ -110,7 +111,7 @@ class FGCNRec(torch.nn.Module):
 
         x = self.out(x)        
         return x
-
+"""
 class FGCN(torch.nn.Module):
     """
     flexibele GCN. allows for adjustable number of layers by setting n_graph_nodes
@@ -1547,8 +1548,8 @@ else:
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 if not torch.cuda.is_available():
     print("running on CPU")
-if profile == 6:
-    model = FGCNRec(1, in_size, out_size).to(device) #TODO: make more adjustable once proven useful
+#if profile == 6:
+#    model = FGCNRec(1, in_size, out_size).to(device) #TODO: make more adjustable once proven useful
 else:
     if args.hidden_size != -1:
         model = FGCN(args.graph_nodes, in_size, out_size, args.hidden_size).to(device)
