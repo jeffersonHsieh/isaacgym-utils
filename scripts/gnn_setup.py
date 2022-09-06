@@ -22,7 +22,7 @@ import argparse
 import datetime
 from torch.autograd import Variable
 import math
-import GPUtil
+#import GPUtil
 from torch_geometric_temporal import GConvLSTM
 
 TIP_THICKNESS = 0.01 #tip radius for branch radius reconstruction.
