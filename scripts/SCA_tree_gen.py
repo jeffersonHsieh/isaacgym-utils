@@ -19,7 +19,7 @@ def sphere(pt, a=1.0, b=1.0, c=1.0):
 
 class TreeGenerator(object):
 
-    def __init__(self, att_pts_max, scaling, offset, da, dt, max_steps, step_width, max_tree_points, tip_radius, gui_on, att_env_shape_funct=sphere, tree_id=0, pipe_model_exponent=2, att_pts_min=None, x_strech=1, y_strech=1, z_strech=1, step_width_scaling=1, env_num=1):
+    def __init__(self,path, att_pts_max, scaling, offset, da, dt, max_steps, step_width, max_tree_points, tip_radius, gui_on, att_env_shape_funct=sphere, tree_id=0, pipe_model_exponent=2, att_pts_min=None, x_strech=1, y_strech=1, z_strech=1, step_width_scaling=1, env_num=1):
         """
         Sets up the tree generator with all of its parameters.
         :param att_pts_max: maximum number of attraction points. for further info see initialize_att_pts
@@ -29,7 +29,7 @@ class TreeGenerator(object):
         :param dt: termination distance
         :param max_steps: maximum amount of steps taken to generate tree model
         :param tip_radius: radius of the branch tips in the generated tree.
-        :gui_on: 1 or 0. Determines whether Isaac Gym is run with gui or without it.
+        :param gui_on: 1 or 0. Determines whether Isaac Gym is run with gui or without it.
         :param step_width: the distance that parent and child nodes have to each other
         :param max_tree_points: algorithm stops after creating the specified number of tree points
         :param att_env_shape_funct: defines tree crown shape. for further info see initialize_att_pts
@@ -293,7 +293,7 @@ class TreeGenerator(object):
 
         self.clean_edge_list()
         tree_string = urdf.toprettyxml(indent='\t')
-        save_path_file = "tree%s.urdf" % self.tree_id
+        save_path_file = "%s[%s]tree%s.urdf" % (self.path, self.att_pts_max, self.tree_id)
 
         with open(save_path_file, "w") as f:
             f.write(tree_string)
@@ -826,10 +826,11 @@ class TreeGenerator(object):
         file_object["tree"]["dof_props"]["damping"] = damping_list # -len(self.tree_points)
         file_object["tree"]["dof_props"]["effort"] = [87] * (len(self.name_dict["joints"])) # -len(self.tree_points)
 
-        with open("tree%s.yaml"%self.tree_id, "w") as f:
+        location = "%s[%s]tree%s.yaml" % (self.path, self.att_pts_max, self.tree_id)
+        with open(location, "w") as f:
             yaml.dump(file_object, f)
 
-        return os.path.abspath("tree%s.yaml"%self.tree_id), stiffness_list, damping_list
+        return os.path.abspath(location), stiffness_list, damping_list
 
 
 
