@@ -9,7 +9,7 @@ from scipy.spatial.transform import Rotation
 import yaml
 
 BATCH_SIZE = 1 # size of batches for random point generation. Lower values might speed up the process, but lead to variations in the final number of attraction points
-STIFFNESS_BASE = 220000 # factor used to calculate stiffness. 
+STIFFNESS_BASE = 10000000 # factor used to calculate stiffness. 
 SIMULATION_STEP_SIZE = 0.01 # internal value for isaacgym simulation
 
 def sphere(pt, a=1.0, b=1.0, c=1.0):
@@ -448,7 +448,7 @@ class TreeGenerator(object):
             self.add_origin(urdf, visual, [0,0,0], [0,0,0])
             geometry = urdf.createElement('geometry')
             box = urdf.createElement('box')
-            box.setAttribute('size', '%s %s %s' % (self.tip_radius, self.tip_radius, self.tip_radius))
+            box.setAttribute('size', '%s %s %s' % (self.tip_radius*2, self.tip_radius*2, self.tip_radius*2))
             geometry.appendChild(box)
             visual.appendChild(geometry)
 
@@ -462,7 +462,7 @@ class TreeGenerator(object):
             self.add_origin(urdf, collision, [0,0,0], [0,0,0])
             geometry = urdf.createElement('geometry')
             box = urdf.createElement('box')
-            box.setAttribute('size', '%s %s %s' % (self.tip_radius, self.tip_radius, self.tip_radius))
+            box.setAttribute('size', '%s %s %s' % (self.tip_radius*2, self.tip_radius*2, self.tip_radius*2))
             geometry.appendChild(box)
             collision.appendChild(geometry)
 
