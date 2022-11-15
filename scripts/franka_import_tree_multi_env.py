@@ -195,7 +195,7 @@ def import_tree(name_dict, urdf_path, yaml_path, edge_def, stiffness_list, dampi
         ### DETECT STABILIZATION ###
         if sec_interval == 0 or sec_interval == 0.5:
             current_pos[env_idx] = get_link_poses(env_idx)
-            if np.sum(np.linalg.norm(np.round(last_pos[env_idx][:3] - current_pos[env_idx][:3], 5))) == 0 or sec_counter - last_timestamp[env_idx] > 60: #tree has stabilized at original position
+            if np.sum(np.linalg.norm(np.round(last_pos[env_idx][:3] - current_pos[env_idx][:3], 5))) == 0 or sec_counter - last_timestamp[env_idx] > 30: #tree has stabilized at original position
                 push_switch[env_idx] = not push_switch[env_idx]
                 last_timestamp[env_idx] = sec_counter
             last_pos[env_idx] = current_pos[env_idx]
@@ -225,7 +225,7 @@ def import_tree(name_dict, urdf_path, yaml_path, edge_def, stiffness_list, dampi
                     force_applied_dict[env_idx].append(force_applied[env_idx])
                 else:
                     force_applied_dict[env_idx] = [force_applied[env_idx]]
-
+                push_num += 1 #globally counted
                 #for x in range(0, scene._n_envs):
                 #    if x in vertex_init_pos_dict.keys():
                 #        print(len(vertex_init_pos_dict[x]))
@@ -235,8 +235,6 @@ def import_tree(name_dict, urdf_path, yaml_path, edge_def, stiffness_list, dampi
                 force = np_to_vec3([0, 0, 0])
                  # # force = np_to_vec3([np.random.rand()*force_magnitude, np.random.rand()*force_magnitude, np.random.rand()*force_magnitude])
                 #loc_tree = tree_location_list[2].p
-                push_num += 1 #globally counted
-            
             ### APPLY ZERO-FORCE ###
             tree.apply_force(env_idx, tree_name, name_dict["links"][2], force, tree_location_list[2].p)
 
@@ -304,6 +302,6 @@ def import_tree(name_dict, urdf_path, yaml_path, edge_def, stiffness_list, dampi
     scene.run(policy=policy)
 
     # clean up to allow multiple runs
-    if scene._viewer is not None:
-       scene._gym.destroy_viewer(scene._viewer)
+    #if scene._viewer is not None:
+    #   scene._gym.destroy_viewer(scene._viewer)
     scene._gym.destroy_sim(scene._sim)

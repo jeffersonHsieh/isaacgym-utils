@@ -18,7 +18,7 @@ class GymAsset(ABC):
         self._shape_props = shape_props
         self._rb_props = rb_props
         self._dof_props = dof_props
-        print(f"init dof props as {(dof_props)}")
+        # print(f"init dof props as {(dof_props)}")
 
         gym_asset_options = gymapi.AssetOptions()
         for key, value in asset_options.items():
@@ -179,14 +179,14 @@ class GymAsset(ABC):
 
     def set_dof_props(self, env_idx, name, dof_props=None):
         if dof_props is None:
-            print(f"no dof props")
+            # print(f"no dof props")
             dof_props = self._dof_props
 
-        print(f"------------------- inside set dof func -------------------")
+        # print(f"------------------- inside set dof func -------------------")
         if dof_props:
             gym_dof_props = self.get_dof_props(env_idx, name)
 
-            print(f"get gym_dof_props shape {gym_dof_props.shape}")
+            # print(f"get gym_dof_props shape {gym_dof_props.shape}")
 
             for key, val in dof_props.items():
                 # print(f" desired key,val to set: {key,val}")

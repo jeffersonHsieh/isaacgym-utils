@@ -1,11 +1,11 @@
 import numpy as np
 
-TREE_NUM = 32
+TREE_NUM = 234
 TREE_PTS = 10
 ENV_NUM = 100
 PER_TREE = True
-GET_PATH = "/home/mark/github/isaacgym-utils/data/10Nodes/"
-PUT_PATH = "/home/mark/github/isaacgym-utils/data/10Nodes_by_tree/"
+GET_PATH = "./dataset/"
+PUT_PATH = "./dataset_by_tree/"
 TREE_START = 0
 
 def combine(tree_start=TREE_START, tree_num=TREE_NUM, env_num=ENV_NUM, get_path=GET_PATH, put_path=PUT_PATH, per_tree=PER_TREE, tree_pts=TREE_PTS):
@@ -26,6 +26,7 @@ def combine(tree_start=TREE_START, tree_num=TREE_NUM, env_num=ENV_NUM, get_path=
 
         prefix = "[%s]"%tree_pts
         try:
+            print(get_path + prefix + 'X_coeff_stiff_damp_tree%s.npy'%(tree))
             coeff_arrays.append(np.load(get_path + prefix + 'X_coeff_stiff_damp_tree%s.npy'%(tree)))
         except:
             coeff_arrays.append(np.load(get_path + 'X_coeff_stiff_damp_tree%s.npy'%(tree)))
@@ -86,4 +87,4 @@ def combine(tree_start=TREE_START, tree_num=TREE_NUM, env_num=ENV_NUM, get_path=
             np.save(put_path + 'X_force_applied', force_applied_save )
             np.save(put_path + 'Y_vertex_final_pos', y_vert_save)
 
-#combine()
+combine()
