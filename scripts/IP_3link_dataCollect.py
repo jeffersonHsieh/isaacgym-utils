@@ -41,26 +41,27 @@ stiffness_list = np.array([50]*len(name_dict['joints']))
 tree = 0
 tree_pts = 3
 
-save_path = '/home/mark/github/isaacgym-utils/scripts/dataset_mark/IP_data/'
-num_iter = 1
-
 #import into IG
 NUM_JOINTS = 9
-stiffness_value_list = [10,20,30]
 
+K_min = 5
+K_max = 500
+NUM_K_VAL = 100
+NUM_ENVS = 100
+stiffness_value_list = np.linspace(K_min, K_max, NUM_K_VAL)
+stiffness_value_list = stiffness_value_list.astype(int)
 
-# #load IG trails with various stiffness values
-# for stiffness_value in stiffness_value_list:
-#     stiffness_list = np.array([stiffness_value]*NUM_JOINTS) 
-#     ig = ig_loader.IG_loader(stiffness_list)
-#     ig.run_policy()
+F_push_min = 1
+F_push_max = 100
+F_push_array = (np.linspace(F_push_min, F_push_max, NUM_ENVS)).astype(int)
 
-#     ig.destory_sim()
+#load IG trails with various stiffness values
+for stiffness_value in stiffness_value_list:
+    stiffness_list = np.array([stiffness_value]*NUM_JOINTS) 
+    ig = ig_loader.IG_loader(stiffness_list, stiffness_value, F_push_array)
+    ig.run_policy()
 
-# ============ just single loop =============
-
-ig = ig_loader.IG_loader(stiffness_list)
-ig.run_policy()
+    ig.destory_sim()
 
 
 

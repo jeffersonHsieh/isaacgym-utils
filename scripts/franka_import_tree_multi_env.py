@@ -19,9 +19,9 @@ import pdb
 import sys
 import datetime
 
-PATH = "/mnt/hdd/jan-malte/10Nodes_new_test/" #"/home/jan-malte/Dataset/8Nodes/" #"/home/jan-malte/Dataset/" #"/media/jan-malte/INTENSO/"
+DEFAULT_PATH = "/home/mark/github/isaacgym-utils/scripts/dataset" #"/mnt/hdd/jan-malte/10Nodes_new_test/" #"/home/jan-malte/Dataset/8Nodes/" #"/home/jan-malte/Dataset/" #"/media/jan-malte/INTENSO/"
 
-def import_tree(name_dict, urdf_path, yaml_path, edge_def, stiffness_list, damping_list, tree_num, tree_pts, path=PATH, num_iteration=10000, env_des=None):
+def import_tree(name_dict, urdf_path, yaml_path, edge_def, stiffness_list, damping_list, tree_num, tree_pts, path=DEFAULT_PATH, num_iteration=10000, env_des=None):
     global no_contact, force, loc_tree, random_index, contact_transform, not_saved
     with open(yaml_path, "r") as f:
         cfg = yaml.load(f, Loader=yaml.Loader)
@@ -87,7 +87,6 @@ def import_tree(name_dict, urdf_path, yaml_path, edge_def, stiffness_list, dampi
   
         return vertex_pos
 
-    # TODO: ask mark what this function is supposed to do, and why it just assumes
     def get_stiffness():
         coeffecients = np.zeros((2, tree.num_joints)) #K stiffness, d damping
         #stiff_k = 600
@@ -235,7 +234,7 @@ def import_tree(name_dict, urdf_path, yaml_path, edge_def, stiffness_list, dampi
                 force = np_to_vec3([0, 0, 0])
                  # # force = np_to_vec3([np.random.rand()*force_magnitude, np.random.rand()*force_magnitude, np.random.rand()*force_magnitude])
                 #loc_tree = tree_location_list[2].p
-            ### APPLY ZERO-FORCE ###
+                ### APPLY ZERO-FORCE ###
             tree.apply_force(env_idx, tree_name, name_dict["links"][2], force, tree_location_list[2].p)
 
             if push_num >= num_iteration and not_saved[env_idx]:
