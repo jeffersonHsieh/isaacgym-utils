@@ -2,9 +2,9 @@ import numpy as np
 from scipy.spatial.transform import Rotation
 import os
 
-GET_PATH = "/mnt/hdd/jan-malte/10Nodes_new_test_by_tree/"
-PUT_PATH = "/mnt/hdd/jan-malte/10Nodes_new_test_by_tree/"
-TREE_NUM = 3
+GET_PATH = "/home/mark/github/isaacgym-utils/data/10Nodes_by_tree/"
+PUT_PATH = "/home/mark/github/isaacgym-utils/data/10Nodes_by_tree/"
+TREE_NUM = 32
 TREE_PTS = 10
 TREE_START = 0
 

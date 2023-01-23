@@ -9,7 +9,7 @@ from scipy.spatial.transform import Rotation
 import yaml
 
 BATCH_SIZE = 1 # size of batches for random point generation. Lower values might speed up the process, but lead to variations in the final number of attraction points
-STIFFNESS_BASE = 220000 # factor used to calculate stiffness. 
+ELASTIC_MODULUS = 6000000000 # factor used to calculate stiffness. 
 SIMULATION_STEP_SIZE = 0.01 # internal value for isaacgym simulation
 
 def sphere(pt, a=1.0, b=1.0, c=1.0):
@@ -66,6 +66,7 @@ class TreeGenerator(object):
         self.env_num = env_num
         self.edge_list = []
         self.gui_on = gui_on
+        self.path = path
 
     def infer_edges_from_list(self):
         """
@@ -202,6 +203,8 @@ class TreeGenerator(object):
         :return: list of tree points.
         """
         i = 0
+        print(len(self.tree_points))
+        print(self.max_tree_points)
         while len(self.att_pts) >= 1 and i < self.max_steps and len(self.tree_points) < self.max_tree_points:
             sv_sets = self.generate_sv_sets() # generate the attraction point sets, that are in play this round
             new_tps = [] # list of tree points to be generated this round as list of xyz coordinates
@@ -325,7 +328,7 @@ class TreeGenerator(object):
 
         self.clean_edge_list()
         tree_string = urdf.toprettyxml(indent='\t')
-        save_path_file = "%s[%s]tree%s.urdf" % (self.path, self.att_pts_max, self.tree_id)
+        save_path_file = "%s[%s]tree%s.urdf" % (self.path, self.max_tree_points, self.tree_id)
 
         with open(save_path_file, "w") as f:
             f.write(tree_string)
@@ -480,7 +483,7 @@ class TreeGenerator(object):
             self.add_origin(urdf, visual, [0,0,0], [0,0,0])
             geometry = urdf.createElement('geometry')
             box = urdf.createElement('box')
-            box.setAttribute('size', '%s %s %s' % (self.tip_radius, self.tip_radius, self.tip_radius))
+            box.setAttribute('size', '%s %s %s' % (self.tip_radius*2, self.tip_radius*2, self.tip_radius*2))
             geometry.appendChild(box)
             visual.appendChild(geometry)
 
@@ -494,7 +497,7 @@ class TreeGenerator(object):
             self.add_origin(urdf, collision, [0,0,0], [0,0,0])
             geometry = urdf.createElement('geometry')
             box = urdf.createElement('box')
-            box.setAttribute('size', '%s %s %s' % (self.tip_radius, self.tip_radius, self.tip_radius))
+            box.setAttribute('size', '%s %s %s' % (self.tip_radius*2, self.tip_radius*2, self.tip_radius*2))
             geometry.appendChild(box)
             collision.appendChild(geometry)
 
@@ -846,10 +849,9 @@ class TreeGenerator(object):
             child_idx = int(name_lst[-1])
             parent = self.find_parent(joint_idx)
 
-            thickness = self.branch_thickness_dict[child_idx]*2 #use thickness of outgoing edge for stiffness calc
+            radius = self.branch_thickness_dict[child_idx] #use thickness of outgoing edge for stiffness calc
 
-            stiffness_factor = thickness**4
-            stiffness = STIFFNESS_BASE * stiffness_factor
+            stiffness = ELASTIC_MODULUS * 1/4 * math.pi * (radius**4)
             stiffness_list.append(stiffness)
 
         stiffness_list[0] = stiffness_list[0] * 2
@@ -858,7 +860,7 @@ class TreeGenerator(object):
         file_object["tree"]["dof_props"]["damping"] = damping_list # -len(self.tree_points)
         file_object["tree"]["dof_props"]["effort"] = [87] * (len(self.name_dict["joints"])) # -len(self.tree_points)
 
-        location = "%s[%s]tree%s.yaml" % (self.path, self.att_pts_max, self.tree_id)
+        location = "%s[%s]tree%s.yaml" % (self.path, self.max_tree_points, self.tree_id)
         with open(location, "w") as f:
             yaml.dump(file_object, f)
 

@@ -19,9 +19,9 @@ import pdb
 import sys
 import datetime
 
-PATH = "/mnt/hdd/jan-malte/10Nodes_new_test/" #"/home/jan-malte/Dataset/8Nodes/" #"/home/jan-malte/Dataset/" #"/media/jan-malte/INTENSO/"
+DEFAULT_PATH = "/home/mark/github/isaacgym-utils/scripts/dataset" #"/mnt/hdd/jan-malte/10Nodes_new_test/" #"/home/jan-malte/Dataset/8Nodes/" #"/home/jan-malte/Dataset/" #"/media/jan-malte/INTENSO/"
 
-def import_tree(name_dict, urdf_path, yaml_path, edge_def, stiffness_list, damping_list, tree_num, tree_pts, path=PATH, num_iteration=10000):
+def import_tree(name_dict, urdf_path, yaml_path, edge_def, stiffness_list, damping_list, tree_num, tree_pts, path=DEFAULT_PATH, num_iteration=10000, env_des=None):
     global no_contact, force, loc_tree, random_index, contact_transform, not_saved
     with open(yaml_path, "r") as f:
         cfg = yaml.load(f, Loader=yaml.Loader)
@@ -87,7 +87,6 @@ def import_tree(name_dict, urdf_path, yaml_path, edge_def, stiffness_list, dampi
   
         return vertex_pos
 
-    # TODO: ask mark what this function is supposed to do, and why it just assumes
     def get_stiffness():
         coeffecients = np.zeros((2, tree.num_joints)) #K stiffness, d damping
         #stiff_k = 600
@@ -119,11 +118,18 @@ def import_tree(name_dict, urdf_path, yaml_path, edge_def, stiffness_list, dampi
 
         print(f" ********* saving data ********* ")
         #print(np.shape(vertex_init_pos_list_arg))
-        save(path + '[%s]X_vertex_init_pos_tree%s_env%s'%(tree_pts, tree_num, env_idx), vertex_init_pos_list_arg )
-        #save('X_coeff_stiff_damp_tree%s_env%s'%(tree_num, env_idx), coeff_stiff_damp )
-        #save('X_edge_def_tree%s_env%s'%(tree_num, env_idx), edge_def )
-        save(path + '[%s]X_force_applied_tree%s_env%s'%(tree_pts, tree_num, env_idx), force_applied_list_arg )
-        save(path + '[%s]Y_vertex_final_pos_tree%s_env%s'%(tree_pts, tree_num, env_idx), vertex_final_pos_list_arg )
+        if env_des is not None:
+            save(path + '[%s]X_vertex_init_pos_tree%s_env%s'%(tree_pts, tree_num, env_des), vertex_init_pos_list_arg )
+            #save('X_coeff_stiff_damp_tree%s_env%s'%(tree_num, env_idx), coeff_stiff_damp )
+            #save('X_edge_def_tree%s_env%s'%(tree_num, env_idx), edge_def )
+            save(path + '[%s]X_force_applied_tree%s_env%s'%(tree_pts, tree_num, env_des), force_applied_list_arg )
+            save(path + '[%s]Y_vertex_final_pos_tree%s_env%s'%(tree_pts, tree_num, env_des), vertex_final_pos_list_arg )
+        else:
+            save(path + '[%s]X_vertex_init_pos_tree%s_env%s'%(tree_pts, tree_num, env_idx), vertex_init_pos_list_arg )
+            #save('X_coeff_stiff_damp_tree%s_env%s'%(tree_num, env_idx), coeff_stiff_damp )
+            #save('X_edge_def_tree%s_env%s'%(tree_num, env_idx), edge_def )
+            save(path + '[%s]X_force_applied_tree%s_env%s'%(tree_pts, tree_num, env_idx), force_applied_list_arg )
+            save(path + '[%s]Y_vertex_final_pos_tree%s_env%s'%(tree_pts, tree_num, env_idx), vertex_final_pos_list_arg )
 
         #print(f"Vinit, Vfinal, Fapplied lengths: {vertex_init_pos_list}")
         #sys.exit() 
@@ -171,8 +177,8 @@ def import_tree(name_dict, urdf_path, yaml_path, edge_def, stiffness_list, dampi
     last_timestamp = [0] * scene._n_envs
 
     coeff_stiff_damp = get_stiffness()
-    save(PATH + '[%s]X_coeff_stiff_damp_tree%s'%(tree_pts,tree_num), coeff_stiff_damp)
-    save(PATH + '[%s]X_edge_def_tree%s'%(tree_pts,tree_num), edge_def)
+    save(path + '[%s]X_coeff_stiff_damp_tree%s'%(tree_pts,tree_num), coeff_stiff_damp)
+    save(path + '[%s]X_edge_def_tree%s'%(tree_pts,tree_num), edge_def)
 
     def policy(scene, env_idx, t_step, t_sim): #TODO: Fix issue where this saves init and final vetor identically
         global rand_idxs, force_vecs, current_pos, last_timestamp, push_switch, done, push_num, last_pos, no_contact, force, loc_tree, random_index, contact_transform, force_vecs, rand_idxs, vertex_init_pos_list, vertex_final_pos_list, force_applied_list, vertex_init_pos, vertex_final_pos, force_applied, not_saved
@@ -188,7 +194,7 @@ def import_tree(name_dict, urdf_path, yaml_path, edge_def, stiffness_list, dampi
         ### DETECT STABILIZATION ###
         if sec_interval == 0 or sec_interval == 0.5:
             current_pos[env_idx] = get_link_poses(env_idx)
-            if np.sum(np.linalg.norm(np.round(last_pos[env_idx][:3] - current_pos[env_idx][:3], 5))) == 0 or sec_counter - last_timestamp[env_idx] > 60: #tree has stabilized at original position
+            if np.sum(np.linalg.norm(np.round(last_pos[env_idx][:3] - current_pos[env_idx][:3], 5))) == 0 or sec_counter - last_timestamp[env_idx] > 30: #tree has stabilized at original position
                 push_switch[env_idx] = not push_switch[env_idx]
                 last_timestamp[env_idx] = sec_counter
             last_pos[env_idx] = current_pos[env_idx]
@@ -218,7 +224,7 @@ def import_tree(name_dict, urdf_path, yaml_path, edge_def, stiffness_list, dampi
                     force_applied_dict[env_idx].append(force_applied[env_idx])
                 else:
                     force_applied_dict[env_idx] = [force_applied[env_idx]]
-
+                push_num += 1 #globally counted
                 #for x in range(0, scene._n_envs):
                 #    if x in vertex_init_pos_dict.keys():
                 #        print(len(vertex_init_pos_dict[x]))
@@ -228,9 +234,7 @@ def import_tree(name_dict, urdf_path, yaml_path, edge_def, stiffness_list, dampi
                 force = np_to_vec3([0, 0, 0])
                  # # force = np_to_vec3([np.random.rand()*force_magnitude, np.random.rand()*force_magnitude, np.random.rand()*force_magnitude])
                 #loc_tree = tree_location_list[2].p
-                push_num += 1 #globally counted
-            
-            ### APPLY ZERO-FORCE ###
+                ### APPLY ZERO-FORCE ###
             tree.apply_force(env_idx, tree_name, name_dict["links"][2], force, tree_location_list[2].p)
 
             if push_num >= num_iteration and not_saved[env_idx]:
@@ -253,17 +257,17 @@ def import_tree(name_dict, urdf_path, yaml_path, edge_def, stiffness_list, dampi
                 #for idx in range(0, scene._n_envs):
                 #force random
                 while True:
-                    sx = np.random.randint(0,1)
+                    sx = np.random.randint(0,2)
                     fx = np.random.randint(10,30)
                     if sx == 0:
                         fx = -fx
 
-                    sy = np.random.randint(0,1)
+                    sy = np.random.randint(0,2)
                     fy = np.random.randint(10,30)
                     if sy == 0:
                         fy = -fy
 
-                    sz = np.random.randint(0,1)
+                    sz = np.random.randint(0,2)
                     fz = np.random.randint(10,30)
                     if sz == 0:
                         fz = -fz
