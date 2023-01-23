@@ -53,7 +53,7 @@ class TreeGenerator(object):
         self.max_steps = max_steps
         self.step_width = step_width
         self.closest_tp = self.initialize_closest_tp_list() # closest tp is a list that holds the closest tree point for every attraction point (index of attraction point is the index on this list) as well as the distance between ap and tp
-        self.edges = {} # dictionary with keys as parents referencing np.arrays of [children, edge_thickness]
+        self.edges = {} # dictionary with keys as parents referencing np.arrays of children indices
         self.branch_thickness_dict = {} # dictionar holding the branch thickness of the incoming edge. key: tp id, value: thickness
         self.max_tree_points = max_tree_points
         self.tip_radius = tip_radius
@@ -66,6 +66,38 @@ class TreeGenerator(object):
         self.env_num = env_num
         self.edge_list = []
         self.gui_on = gui_on
+
+    def infer_edge_list(self):
+        """
+        this function should allow us to generate the edges dictionary required by many processing functions
+        in this class from a list of edge tuples. It is assumed that edge tuples are unique and that no tuple
+        (a, b) exists, if tuple (b, a) is also part of the edge tuples list.
+
+        further it is assumed the root node has index 0 and that the edge tuples reference indices that align
+        with the tree points array
+        """
+        frontier = [0] # assuming root node has index 0
+        edges_dict = {}
+        edge_list = self.edge_list
+        while len(frontier) > 0:
+            current_node = frontier.pop()
+            children = []
+
+            for node_a, node_b in enumerate(edge_list):
+                if node_a == current_node:
+                    children.append(node_b)
+                    frontier.append(node_a)
+                    edge_list.remove((node_a, node_b))
+                if node_b == current_node:
+                    children.append(node_a)
+                    frontier.append(node_b)
+                    edge_list.remove((node_a, node_b))
+
+            edges_dict[current_node] = np.array(children)
+
+        self.edges = edges_dict
+
+
 
     def min_da(self):
         """
