@@ -67,7 +67,7 @@ class TreeGenerator(object):
         self.edge_list = []
         self.gui_on = gui_on
 
-    def infer_edge_list(self):
+    def infer_edges_from_list(self):
         """
         this function should allow us to generate the edges dictionary required by many processing functions
         in this class from a list of edge tuples. It is assumed that edge tuples are unique and that no tuple
