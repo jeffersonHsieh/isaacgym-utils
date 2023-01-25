@@ -20,15 +20,16 @@ import sys
 import datetime
 
 DEFAULT_PATH = "/home/mark/github/isaacgym-utils/scripts/dataset" #"/mnt/hdd/jan-malte/10Nodes_new_test/" #"/home/jan-malte/Dataset/8Nodes/" #"/home/jan-malte/Dataset/" #"/media/jan-malte/INTENSO/"
-urdf_path = '/home/mark/github/isaacgym-utils/scripts/dataset_mark/[3]tree0.urdf'
-yaml_path = '/home/mark/github/isaacgym-utils/scripts/dataset_mark/[3]tree0.yaml'
-name_dict = {'joints': ['link1_jointx', 'link1_jointy', 'link1_jointz', 'link2_jointx', 'link2_jointy', 'link2_jointz', 'link3_jointx', 'link3_jointy', 'link3_jointz'],  
-'links': ['base_link', 'link1x', 'link1z', 'link1', 'link2x', 'link2z', 'link2', 'link3x', 'link3z', 'link3']}
+
+urdf_path = '/home/mark/github/isaacgym-utils/scripts/dataset_mark/real_URDF/[10]tree0.urdf'
+yaml_path = '/home/mark/github/isaacgym-utils/scripts/dataset_mark/real_URDF/[10]tree0.yaml'
+
+name_dict =   {'joints': ['joint0_x_to_1', 'joint0_y_to_1', 'joint0_z_to_1', 'joint1_x_to_3', 'joint1_y_to_3', 'joint1_z_to_3', 'joint1_x_to_4', 'joint1_y_to_4', 'joint1_z_to_4', 'joint3_x_to_6', 'joint3_y_to_6', 'joint3_z_to_6', 'joint3_x_to_7', 'joint3_y_to_7', 'joint3_z_to_7', 'joint4_x_to_5', 'joint4_y_to_5', 'joint4_z_to_5', 'joint6_x_to_9', 'joint6_y_to_9', 'joint6_z_to_9', 'joint7_x_to_8', 'joint7_y_to_8', 'joint7_z_to_8', 'joint7_x_to_2', 'joint7_y_to_2', 'joint7_z_to_2'], 'links': ['base_link', 'link_0_to_1', 'link_1_to_3', 'link_1_to_4', 'link2_tip', 'link_3_to_6', 'link_3_to_7', 'link_4_to_5', 'link5_tip', 'link_6_to_9', 'link_7_to_8', 'link_7_to_2', 'link8_tip', 'link9_tip']} 
+edge_def = [(0, 1), (1, 2), (1, 3), (2, 5), (2, 6), (3, 7), (7, 8), (5, 9), (6, 10), (6, 11), (10, 12), (9, 13), (11, 4)] 
 
 save_path = "/home/mark/github/isaacgym-utils/scripts/IP_dataset/"
 
 NUM_JOINTS = len(name_dict['joints'])
-edge_def = [(0, 1), (1, 2), (1, 3), (1, 4), (1, 5), (2, 6), (2, 7), (3, 8), (6, 9), (4, 10), (9, 11), (7, 12), (8, 13), (5, 14), (11, 15)]
 damping_list = np.array([25]*NUM_JOINTS) 
 stiffness_list = np.array([50]*NUM_JOINTS) 
 stiffness_increment = 10
@@ -195,6 +196,11 @@ class IG_loader(object):
     def run_policy(self):
         self.scene.run(policy=self.policy)
 
+    def run_policy_do_nothing(self):
+        self.scene.run(policy=self.policy_do_nothing)
+
+    def policy_do_nothing(self, scene, env_idx, t_step, t_sim):
+        pass
     
     #================================================================================================
     def policy(self, scene, env_idx, t_step, t_sim):
