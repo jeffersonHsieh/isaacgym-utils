@@ -25,7 +25,7 @@ output: URDF file
 ''' 
 
 
-path = '/home/mark/github/isaacgym-utils/scripts/dataset_mark/real_URDF/'
+path = '/home/mark/data/IsaacGym/dataset_mark/real_URDF/'
 TREE_POINTS = 10
 
 class real3D_to_URDF(object):

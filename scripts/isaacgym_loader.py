@@ -21,8 +21,8 @@ import datetime
 
 DEFAULT_PATH = "/home/mark/github/isaacgym-utils/scripts/dataset" #"/mnt/hdd/jan-malte/10Nodes_new_test/" #"/home/jan-malte/Dataset/8Nodes/" #"/home/jan-malte/Dataset/" #"/media/jan-malte/INTENSO/"
 
-urdf_path = '/home/mark/github/isaacgym-utils/scripts/dataset_mark/real_URDF/[10]tree0.urdf'
-yaml_path = '/home/mark/github/isaacgym-utils/scripts/dataset_mark/real_URDF/[10]tree0.yaml'
+urdf_path = '/home/mark/data/IsaacGym/dataset_mark/real_URDF/[10]tree0.urdf'
+yaml_path = '/home/mark/data/IsaacGym/dataset_mark/real_URDF/[10]tree0.yaml'
 
 name_dict =   {'joints': ['joint0_x_to_1', 'joint0_y_to_1', 'joint0_z_to_1', 'joint1_x_to_3', 'joint1_y_to_3', 'joint1_z_to_3', 'joint1_x_to_4', 'joint1_y_to_4', 'joint1_z_to_4', 'joint3_x_to_6', 'joint3_y_to_6', 'joint3_z_to_6', 'joint3_x_to_7', 'joint3_y_to_7', 'joint3_z_to_7', 'joint4_x_to_5', 'joint4_y_to_5', 'joint4_z_to_5', 'joint6_x_to_9', 'joint6_y_to_9', 'joint6_z_to_9', 'joint7_x_to_8', 'joint7_y_to_8', 'joint7_z_to_8', 'joint7_x_to_2', 'joint7_y_to_2', 'joint7_z_to_2'], 'links': ['base_link', 'link_0_to_1', 'link_1_to_3', 'link_1_to_4', 'link2_tip', 'link_3_to_6', 'link_3_to_7', 'link_4_to_5', 'link5_tip', 'link_6_to_9', 'link_7_to_8', 'link_7_to_2', 'link8_tip', 'link9_tip']} 
 edge_def = [(0, 1), (1, 2), (1, 3), (2, 5), (2, 6), (3, 7), (7, 8), (5, 9), (6, 10), (6, 11), (10, 12), (9, 13), (11, 4)] 

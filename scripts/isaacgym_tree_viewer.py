@@ -9,7 +9,6 @@ import isaacgym_loader as ig_loader
 
 
 import argparse
-import combine_dataset_files as combine
 import make_relative_rotational_dataset as mkori
 import yaml
 import os
@@ -28,8 +27,8 @@ output: IG visualizer
 print(f" ----------- script starting  ----------- ")
 
 #import URDF
-urdf_path = '/home/mark/github/isaacgym-utils/scripts/dataset_mark/real_URDF/[10]tree0.urdf'
-yaml_path = '/home/mark/github/isaacgym-utils/scripts/dataset_mark/real_URDF/[10]tree0.yaml'
+urdf_path = '/home/mark/data/IsaacGym/dataset_mark/real_URDF/[10]tree0.urdf'
+yaml_path = '/home/mark/data/IsaacGym/dataset_mark/real_URDF/[10]tree0.yaml'
 
 tree = 0
 tree_pts = 10
