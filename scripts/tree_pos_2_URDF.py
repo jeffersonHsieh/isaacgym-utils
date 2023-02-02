@@ -162,17 +162,24 @@ def main():
 
 
     #plot
-    urdfCreator.plot_tree_from_real(tg.tree_points, urdfCreator.X_edge)
+    # urdfCreator.plot_tree_from_real(tg.tree_points, urdfCreator.X_edge)
 
     
     #generate URDF
     tg.calculate_branch_thickness()
-    name_dict, edge_def, urdf_path = tg.generate_urdf()
-    yaml_path, stiffness_list, damping_list = tg.generate_yaml()
 
-    print(f" name_dict: {name_dict} , \n edge_def: {edge_def} , \n urdf_path: {urdf_path} ")
-    print(f" yaml_path: {yaml_path} , \n stiffness_list: {stiffness_list} , \n damping_list: {damping_list} ")
-    print(f" len(name_dict): {len(name_dict['joints'])}")
+
+    for r in tg.branch_thickness_dict:
+        print(f"r {r} with {tg.branch_thickness_dict[r]}")
+
+    name_dict, edge_def, urdf_path = tg.generate_urdf()
+    # yaml_path, stiffness_list, damping_list = tg.generate_yaml()
+
+    print(f" edge_def: {edge_def} , \n urdf_path: {urdf_path} ")
+
+    print(f" NUM links: {len(name_dict['links'])} name_dict[links]: {name_dict['links']} ")
+    # print(f" yaml_path: {yaml_path} , \n stiffness_list: {stiffness_list} , \n damping_list: {damping_list} ")
+    # print(f" len(name_dict): {len(name_dict['joints'])}")
 
 
     print(f" ================ ending sample script ================  ")

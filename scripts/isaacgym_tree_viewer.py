@@ -27,6 +27,7 @@ output: IG visualizer
 print(f" ----------- script starting  ----------- ")
 
 #import URDF
+path = '/home/mark/data/IsaacGym/dataset_mark/real_URDF/'
 urdf_path = '/home/mark/data/IsaacGym/dataset_mark/real_URDF/[10]tree0.urdf'
 yaml_path = '/home/mark/data/IsaacGym/dataset_mark/real_URDF/[10]tree0.yaml'
 
@@ -56,8 +57,8 @@ F_push_max = 100
 F_push_array = (np.linspace(F_push_min, F_push_max, NUM_ENVS)).astype(int)
 
 #load IG trails with various stiffness values
-
-ig = ig_loader.IG_loader(stiffness_list)
+# def __init__(self, path=DEFAULT_PATH, save_path = SAVE_PATH, stiffness_list=None, stiffness_increment = 10, F_push_array=F_push_array_default):
+ig = ig_loader.IG_loader(path = path, save_path = None, stiffness_list = None, stiffness_increment = None)
 ig.run_policy_do_nothing()
 
 
