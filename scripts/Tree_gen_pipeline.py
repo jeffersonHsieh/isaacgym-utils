@@ -10,15 +10,13 @@ import yaml
 import os
 
 ## Parameters for the SCA. Lists specify possible parameters, of which one is chosen at random for every tree
-TRUNK_HEIGHT_FACTORS = [1,2]
 SCALING = 1
 PIPE_MODEL_EXPONENT = 3 #suggested values: 2 or 3
-STEP_WIDTH = 0.5 #determines the lenght of individual tree segments
-a = 100 # suggested values Trunk_Height and higher
-HEIGHT_STRECH_VALS = [0.5, 0.33, 1] #factors to strech the crown shape of the tree to be non circular
-WIDTH_STRECH_VALS = [0.5, 0.33, 1] #factors to strech the crown shape of the tree to be non circular
+STEP_WIDTH = 0.25 #determines the lenght of individual tree segments
+HEIGHT_STRECH_VALS = [0.05, 0.10] #[0.5, 0.33, 1] #factors to strech the crown shape of the tree to be non circular
+WIDTH_STRECH_VALS = [1.0, 9.0] #[0.5, 0.33, 1] #factors to strech the crown shape of the tree to be non circular
 ATT_PTS_NUM = [80, 160, 320, 640] #800, 1600, 3200, 6400 number of attraction points
-PATH = "dataset"
+PATH = "/home/jan-malte/IROS_tree_dataset/isaacgym-utils/dataset"
 
 
 yaml_paths = []
@@ -38,7 +36,7 @@ parser.add_argument("-ori_path", type=str, dest="ori_path")
 parser.add_argument("-ori", type=int, default=1, dest="ori")
 parser.add_argument("-demo", type=int, dest="demo")
 parser.add_argument("-num_iter", type=int, default=2000, dest="num_iter")
-parser.add_argument("-s_i_steps", type=int, default=10, dest="s_i_steps") # size increase steps: starting from tree_pts we repeat tree generation s_i_steps times, increasing tree size by one each time
+parser.add_argument("-s_i_steps", type=int, default=0, dest="s_i_steps") # size increase steps: starting from tree_pts we repeat tree generation s_i_steps times, increasing tree size by one each time
 args = parser.parse_args() 
 
 tree_pts = args.tree_pts # Specifies number of joints in the tree
@@ -67,6 +65,7 @@ while sis > -1:
     sis = sis-1
     if demo is None:
         while tree < tree_num:
+            print(f" ******* SIS: {sis} ends at {-1}. Currently making tree w size: {tree_pts}. Remaining variations: {tree}/{tree_num}")
             trunk_height = STEP_WIDTH * 0.75 / SCALING #TRUNK_HEIGHT_FACTORS[random.randrange(0, len(TRUNK_HEIGHT_FACTORS))] / SCALING
             d_termination = SCALING/10
 

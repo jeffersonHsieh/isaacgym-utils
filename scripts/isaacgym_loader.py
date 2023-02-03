@@ -166,7 +166,7 @@ class IG_loader(object):
         scene.add_asset(self.tree_name, self.tree, tree_transform, collision_filter=1) # avoid self-collisions
 
     def setup_inc_K(self, scene, _, K_incremeter):
-        print(f" === inside setup a tree asset ===  ")
+        # print(f" === inside setup a tree asset ===  ")
         self.cfg['tree']['dof_props']['stiffness'] = self.stiffness_list + K_incremeter
         # print(f" cfg: {self.cfg['tree']['dof_props']['stiffness']}  ")
 
@@ -177,7 +177,7 @@ class IG_loader(object):
         scene.add_asset(self.tree_name, self.tree, tree_transform, collision_filter=1) # avoid self-collisions
 
     def setup_vary_K(self, scene, _, K_multiplier):
-        print(f" === inside setup a tree asset with K_multiplier:  {K_multiplier} ===  ")
+        # print(f" === inside setup a tree asset with K_multiplier:  {K_multiplier} ===  ")
         temp_cfg = copy.deepcopy(self.cfg)
         
         temp_cfg['tree']['dof_props']['stiffness'] = np.asarray(self.cfg['tree']['dof_props']['stiffness'])  * K_multiplier

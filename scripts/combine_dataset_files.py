@@ -87,4 +87,4 @@ def combine(tree_start=TREE_START, tree_num=TREE_NUM, env_num=ENV_NUM, get_path=
             np.save(put_path + 'X_force_applied', force_applied_save )
             np.save(put_path + 'Y_vertex_final_pos', y_vert_save)
 
-combine()
+# combine()

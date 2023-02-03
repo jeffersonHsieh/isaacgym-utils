@@ -55,7 +55,7 @@ class GymTree(GymURDFAsset):
                         assets_root=assets_root
                         )
 
-        print(f"init tree func {(cfg['dof_props'])} ")   
+        # print(f"init tree func {(cfg['dof_props'])} ")   
 
 
         self._use_custom_ee = False
@@ -246,7 +246,7 @@ class GymTree(GymURDFAsset):
             self._UPPER_LIMITS = dof_props['upper']
             self._VEL_LIMITS = dof_props['velocity']
 
-        print(f" ----------- inside post create actor --------- ")
+        # print(f" ----------- inside post create actor --------- ")
 
         self.set_actuation_mode(self._actuation_mode, env_idx, name)
 

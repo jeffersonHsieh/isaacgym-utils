@@ -267,14 +267,12 @@ def import_tree(name_dict, urdf_path, yaml_path, edge_def, stiffness_list, dampi
                     if sy == 0:
                         fy = -fy
 
-                    sz = np.random.randint(0,2)
-                    fz = np.random.randint(10,30)
-                    if sz == 0:
-                        fz = -fz
+                    fz = 0
+                    
                     if abs(fx) + abs(fy) + abs(fz) != 0:
                         break
                 
-                force = np_to_vec3([fx, fy, fz])
+                force = np_to_vec3([fx, fy, 0])
                 force_vecs[env_idx] = force
                 #force = np_to_vec3([-10,-10,0])
 

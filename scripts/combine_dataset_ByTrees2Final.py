@@ -11,11 +11,11 @@ input: {[10]X_force_applied_tree 1...N}.npy
 output: {X_final, Y_final, X_edge_def, X_force_applied}.npy
 '''
 
-NUM_TREE_VARIATION = 27
-SIZE_TREE_NODE = 10
+NUM_TREE_VARIATION = 3
+SIZE_TREE_NODE = 15
 
-FOLDER_PATH = "/home/mark/github/tree_is_all_you_need/data/ICRA23_prevTrial/10Nodes_by_tree/"
-PUT_PATH = "/home/mark/github/tree_is_all_you_need/data/ICRA23_prevTrial_restruct/10Nodes_by_tree/"
+INPUT_FOLDER_PATH = "/home/jan-malte/IROS_tree_dataset/isaacgym-utils/dataset_15_node_only_test/dataset_by_tree/"
+PUT_PATH = "/home/jan-malte/IROS_tree_dataset/isaacgym-utils/dataset_15_node_only_test/dataset_final/"
 
 
 
@@ -49,10 +49,10 @@ if __name__ == '__main__':
     print(f" ================= script start ================= ")
 
     # ---------------- desired structured data from working version ----------------
-    desired_file_path = "/home/mark/github/tree_is_all_you_need/data/sim_data_restructure/10Nodes_by_tree/trial0/"
-    desired_F, desired_X, desired_Y, desired_edge = load_npy_test(desired_file_path)
-    print(f"desired_F.shape: {desired_F.shape}, X {desired_X.shape}, Y {desired_Y.shape}, edge {desired_edge.shape}")
-    #desired_F.shape: (10021, 3, 16), X (10021, 7, 16), Y (10021, 7, 16), edge (15, 2)
+    # INPUT_FOLDER_PATH = "/home/mark/github/tree_is_all_you_need/data/sim_data_restructure/10Nodes_by_tree/trial0/"
+    # desired_F, desired_X, desired_Y, desired_edge = load_npy_test(desired_file_path)
+    # print(f"desired_F.shape: {desired_F.shape}, X {desired_X.shape}, Y {desired_Y.shape}, edge {desired_edge.shape}")
+    # #desired_F.shape: (10021, 3, 16), X (10021, 7, 16), Y (10021, 7, 16), edge (15, 2)
 
     # ---------------- data to structure from IG ----------------
 
@@ -74,7 +74,7 @@ if __name__ == '__main__':
 
         
         #load npy files
-        X_edges, X_force, X_pos, Y_pos = load_npy(data_dir= FOLDER_PATH, tree_num = tree_index, prefix=prefix)
+        X_edges, X_force, X_pos, Y_pos = load_npy(data_dir= INPUT_FOLDER_PATH, tree_num = tree_index, prefix=prefix)
 
         #save npy files into directory
         np.save(folder_path + '/final_F', X_force)
