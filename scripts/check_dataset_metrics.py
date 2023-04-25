@@ -2,7 +2,7 @@ import numpy as np
 
 TREE_NUM = 234
 ENV_NUM = 100
-PATH = "./dataset_by_tree/"
+PATH = "../dataset_by_tree/"
 PER_TREE = True
 CLEAN = "" #"_clean"
 displacements = []

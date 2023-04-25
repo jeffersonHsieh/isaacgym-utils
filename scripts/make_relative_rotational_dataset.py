@@ -40,8 +40,8 @@ def calculate_orientational_data(X_edges, X_pos, Y_pos, X_force):
             quat_init = rot_init.as_quat()
             quat_final = rot_final.as_quat()
 
-            init_quat_data[push_idx][parent] = quat_init
-            final_quat_data[push_idx][parent] = quat_final
+            init_quat_data[push_idx][child] = quat_init
+            final_quat_data[push_idx][child] = quat_final
             
             if parent not in init_inv_rot_dict.keys():
                 init_inv_rot_dict[parent] = init_inv_rot
@@ -49,7 +49,7 @@ def calculate_orientational_data(X_edges, X_pos, Y_pos, X_force):
 
     X_pos = np.append(X_pos, init_quat_data, axis=2)
     Y_pos = np.append(Y_pos, final_quat_data, axis=2)
-    X_edges, X_pos, Y_pos, X_force = prune_tip_links(X_edges, X_pos, Y_pos, X_force)
+    #X_edges, X_pos, Y_pos, X_force = prune_tip_links(X_edges, X_pos, Y_pos, X_force)
     return X_edges, X_pos, Y_pos, X_force
 
 def calculate_rot(parent_pos, child_pos): #Function produces correct results -> Identical with ground truth

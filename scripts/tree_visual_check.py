@@ -71,12 +71,13 @@ def make_dataset(X_edges, X_force, X_pos, Y_pos): # CALLED PER TREE
     return dataset
 
 def load_npy(data_dir, tree_num):
+    prefix = "[10]"
     # Load npy files from dataset_dir. A shortcut to 'sample_1_push' shared folder has been added to 'My Drive' 
-    X_stiffness_damping = np.load(os.path.join(data_dir, 'X_coeff_stiff_damp_tree%s.npy'%tree_num))
-    X_edges = np.load(os.path.join(data_dir, 'X_edge_def_tree%s.npy'%tree_num))
-    X_force = np.load(os.path.join(data_dir, 'X_force_applied_tree%s.npy'%tree_num))
-    X_pos = np.load(os.path.join(data_dir, 'X_vertex_init_pose_tree%s.npy'%tree_num))
-    Y_pos = np.load(os.path.join(data_dir, 'Y_vertex_final_pos_tree%s.npy'%tree_num))
+    X_stiffness_damping = np.load(os.path.join(data_dir, prefix+'X_coeff_stiff_damp_tree%s.npy'%tree_num))
+    X_edges = np.load(os.path.join(data_dir, prefix+'X_edge_def_tree%s.npy'%tree_num))
+    X_force = np.load(os.path.join(data_dir, prefix+'X_force_applied_tree%s.npy'%tree_num))
+    X_pos = np.load(os.path.join(data_dir, prefix+'X_vertex_init_pose_tree%s.npy'%tree_num))
+    Y_pos = np.load(os.path.join(data_dir, prefix+'Y_vertex_final_pos_tree%s.npy'%tree_num))
 
     # Truncate node orientations and tranpose to shape (num_graphs, num_nodes, 3)
     X_pos = X_pos[:, :7, :].transpose((0,2,1))
@@ -139,8 +140,8 @@ def visualize_graph(X, Y, X_0, edge_index, force_node, force, name):
     plt.savefig(name)
     plt.show()
 
-TREE_NUM = 10
-d = "/mnt/hdd/jan-malte/test_set_by_tree/"
+TREE_NUM = 1
+d = "/home/jan-malte/IROS_tree_dataset/isaacgym-utils/test_by_tree"
 
 dataset = []
 for tree in range(0, TREE_NUM):
@@ -157,12 +158,13 @@ for tree in range(0, TREE_NUM):
     dataset_tree = make_dataset(X_edges, X_force_arr, X_pos_arr, Y_pos_arr)
     dataset = dataset + dataset_tree
 
-results_path = "/mnt/hdd/jan-malte/test_set_by_tree/inspection"
-os.mkdir(results_path)
+results_path = "/home/jan-malte/IROS_tree_dataset/isaacgym-utils/results"
+if not os.path.exists(results_path):
+    os.mkdir(results_path)
 results_path = results_path+"/"
 
 for _ in range(30):
-    i = random.randint(0, len(dataset))
+    i = random.randint(0, len(dataset)-1)
     print("shown tree index: %s"%i)
     X = dataset[i].x[:,:3]
     Y = dataset[i].y[:,:3]

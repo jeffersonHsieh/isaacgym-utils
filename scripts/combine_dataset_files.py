@@ -15,7 +15,7 @@ def combine(tree_start=TREE_START, tree_num=TREE_NUM, env_num=ENV_NUM, get_path=
     coeff_arrays = []
     edge_def_arrays = []
 
-
+    print("combine")
     for tree in range(tree_start, tree_num):
         if per_tree:
             y_vert_arrays = []

@@ -5,6 +5,8 @@ from isaacgym import gymapi
 from .math_utils import min_jerk, slerp_quat, vec3_to_np, np_to_vec3, \
                     project_to_line, compute_task_space_impedance_control
 
+from .rrt import RRT
+
 
 class Policy(ABC):
 
@@ -97,7 +99,87 @@ class MoveBlockPolicy(Policy):
 
         self._ee_waypoint_policies[env_idx](scene, env_idx, t_step, t_sim)
 
-   
+
+class RRTGraspBlockPolicy(Policy):
+    def __init__(self, franka, franka_name, block, block_name, wall, wall_name, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._franka = franka
+        self._franka_name = franka_name
+        self._block = block
+        self._block_name = block_name
+        self._wall = wall
+        self._wall_name = wall_name
+
+        self._time_horizon = 1000
+
+        self.reset()
+
+    
+    def ee_upright_constraint(self, q):
+        '''
+        TODO: Implement constraint function and its gradient. 
+        
+        This constraint should enforce the end-effector stays upright.
+        Hint: Use the roll and pitch angle in desired_ee_rp. The end-effector is upright in its home state.
+        Input:
+            q - a joint configuration
+        Output:
+            err - a non-negative scalar that is 0 when the constraint is satisfied
+            grad - a vector of length 6, where the ith element is the derivative of err w.r.t. the ith element of ee
+        '''
+        desired_ee_rp = self._franka.ee(self._franka.home_joints)[3:5]
+        ee = self._franka.ee(q)
+        err = np.sum((np.asarray(desired_ee_rp) - np.asarray(ee[3:5]))**2)
+        grad = np.asarray([0, 0, 0, 2*(ee[3]-desired_ee_rp[0]), 2*(ee[4]-desired_ee_rp[1]), 0])
+        return err, grad
+
+    def reset(self):
+        self._pre_grasp_transforms = []
+        self._grasp_transforms = []
+        self._init_ee_transforms = []
+        self._ee_waypoint_policies = []
+        self.boxes = []
+    
+    def is_in_collision(self, joints):
+        for box in self.boxes:
+            if self._franka.check_box_collision(joints, box):
+                return True
+        return False
+
+    def __call__(self, scene, env_idx, t_step, t_sim):
+        ee_transform = self._franka.get_ee_transform(env_idx, self._franka_name)
+
+        if t_step == 0:
+            wall_pos = self._wall.get_rb_poses_as_np_array(env_idx, self._wall_name)
+            wall_size = np.array([[self._wall.sx, self._wall.sy, self._wall.sz]])
+            self.boxes = np.concatenate((wall_pos, wall_size), axis=1)
+            rrt = RRT(self._franka, self.is_in_collision)
+            self._init_ee_transforms.append(ee_transform)
+            block_pos = self._block.get_rb_poses_as_np_array(env_idx, self._block_name)[0, :3]
+            block_pos = np.concatenate((block_pos, np.array([0, 0, 0])))
+
+            joints_start = self._franka.INIT_JOINTS[:-2]
+            joints_target = self._franka.inverse_kinematics(block_pos, joints_start)
+            # constraint = self.ee_upright_constraint
+            # self.plan = rrt.plan(joints_start, joints_target, constraint)
+            print(joints_start)
+            print(joints_target)
+            self.plan = rrt.plan(joints_start, joints_target)
+            self.i = 0
+
+            self._ee_waypoint_policies.append(
+                EEImpedanceWaypointPolicy(self._franka, self._franka_name, ee_transform, ee_transform, T=15)
+            )
+
+        if t_step % 15 == 0:
+            # self._init_ee_transforms.append(ee_transform)
+            try:
+                self._ee_waypoint_policies[env_idx] = SetJointPolicy(self._franka, self._franka_name, self.plan[self.i], T=15)
+                self.i += 1
+            except:
+                self._ee_waypoint_policies[env_idx] = SetJointPolicy(self._franka, self._franka_name, self.plan[-1], T=15)
+
+        self._ee_waypoint_policies[env_idx](scene, env_idx, t_step, t_sim)
 
 class GraspBlockPolicy(Policy):
 
@@ -122,6 +204,7 @@ class GraspBlockPolicy(Policy):
         ee_transform = self._franka.get_ee_transform(env_idx, self._franka_name)
 
         if t_step == 0:
+            self._franka.open_grippers(env_idx, self._franka_name)
             self._init_ee_transforms.append(ee_transform)
             self._ee_waypoint_policies.append(
                 EEImpedanceWaypointPolicy(self._franka, self._franka_name, ee_transform, ee_transform, T=20)
@@ -130,7 +213,7 @@ class GraspBlockPolicy(Policy):
         if t_step == 20:
             block_transform = self._block.get_rb_transforms(env_idx, self._block_name)[0]
             grasp_transform = gymapi.Transform(p=block_transform.p, r=self._init_ee_transforms[env_idx].r)
-            pre_grasp_transfrom = gymapi.Transform(p=grasp_transform.p + gymapi.Vec3(0, 0, 0.2), r=grasp_transform.r)
+            pre_grasp_transfrom = gymapi.Transform(p=grasp_transform.p + gymapi.Vec3(0, 0, 0.3), r=grasp_transform.r)
 
             self._grasp_transforms.append(grasp_transform)
             self._pre_grasp_transforms.append(pre_grasp_transfrom)
@@ -318,3 +401,19 @@ class EEImpedanceWaypointPolicy(Policy):
         target_transform = self._traj[min(t_step, self._T - 1)]
         tau = self._ee_impedance_ctrlr.compute_tau(env_idx, target_transform)
         self._franka.apply_torque(env_idx, self._franka_name, tau)
+
+class SetJointPolicy(Policy):
+
+    def __init__(self, franka, franka_name, joints, T=15):
+        self._franka = franka
+        self._franka_name = franka_name
+        self._joints = joints
+
+        self._T = T
+
+    @property
+    def horizon(self):
+        return self._T
+
+    def __call__(self, scene, env_idx, t_step, t_sim):
+        self._franka.set_joints(env_idx, self._franka_name, np.concatenate([self._joints, np.zeros(2)]))

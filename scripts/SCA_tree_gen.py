@@ -203,7 +203,6 @@ class TreeGenerator(object):
         :return: list of tree points.
         """
         i = 0
-        print(len(self.tree_points))
         print(self.max_tree_points)
         while len(self.att_pts) >= 1 and i < self.max_steps and len(self.tree_points) < self.max_tree_points:
             sv_sets = self.generate_sv_sets() # generate the attraction point sets, that are in play this round
@@ -211,7 +210,7 @@ class TreeGenerator(object):
             point_index = len(self.tree_points) # point index is assigned as highest index so far +1
             for key in sv_sets.keys():
                 new_tps.append(self.generate_new_point(key, sv_sets[key])) # generate new tree point. self.edges and self.tree_points is updated in this function
-                if len(self.tree_points) > self.max_tree_points: # stop immediately after the max number of tree points was reaches
+                if len(self.tree_points) >= self.max_tree_points: # stop immediately after the max number of tree points was reaches
                     break
             self.update_closest_tp_list(new_tps, point_index) # update the closest tp list
             self.step_width = self.step_width * self.step_width_scaling # reduce step width

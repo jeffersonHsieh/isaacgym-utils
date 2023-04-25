@@ -54,9 +54,9 @@ tree:
   shape_props:
     thickness: 1e-3
   dof_props:
-    stiffness: [2e3, 2e3,  2e3]
-    damping: [2e2, 2e2,  2e2]
-    effort: [87, 87, 87]
+    stiffness: [2e3, 2e3,  2e3, 2e3, 2e3,  2e3, 2e3, 2e3,  2e3, 2e3, 2e3,  2e3,2e3, 2e3,  2e3,2e3, 2e3,  2e3,2e3, 2e3,  2e3,2e3, 2e3,  2e3,2e3, 2e3]
+    damping: [2e2, 2e2,  2e2, 2e2, 2e2,  2e2, 2e2, 2e2,  2e2, 2e2, 2e2,  2e2, 2e2, 2e2,  2e2, 2e2, 2e2,  2e2, 2e2, 2e2,  2e2, 2e2, 2e2,  2e2, 2e2, 2e2]
+    effort: [87, 87, 87,87, 87, 87,87, 87, 87,87, 87, 87,87, 87, 87,87, 87, 87,87, 87, 87,87, 87, 87,87, 87]
 
 table:
   dims:

@@ -13,6 +13,8 @@ from isaacgym_utils.draw import draw_transforms, draw_contacts, draw_camera
 
 import pdb
 
+import quaternion
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('--cfg', '-c', type=str, default='/home/jan-malte/OCRL_project/isaacgym-utils/cfg/franka_pick_block.yaml')
@@ -36,11 +38,10 @@ if __name__ == "__main__":
                         rb_props=cfg['block']['rb_props'],
                         asset_options=cfg['block']['asset_options']
                         )
-
     table_transform = gymapi.Transform(p=gymapi.Vec3(cfg['table']['dims']['sx']/3, 0, cfg['table']['dims']['sz']/2))
     franka_transform = gymapi.Transform(p=gymapi.Vec3(0, 0, cfg['table']['dims']['sz'] + 0.01))
-    wall_transform = gymapi.Transform(p=gymapi.Vec3(2, 0, cfg['wall']['dims']['sz']/2 + cfg['table']['dims']['sz'] + 0.01))
-    block_transform = gymapi.Transform(p=gymapi.Vec3(0.8, 0, cfg['table']['dims']['sz'] + 0.01))
+    wall_transform = gymapi.Transform(p=gymapi.Vec3(0.5, 0, cfg['wall']['dims']['sz']/2 + cfg['table']['dims']['sz'] + 0.01))
+    block_transform = gymapi.Transform(p=gymapi.Vec3(1, 0, cfg['table']['dims']['sz'] + 0.01))
     
 
     table_name, franka_name, block_name, wall_name = 'table', 'franka', 'block', 'wall'
@@ -62,39 +63,12 @@ if __name__ == "__main__":
         scene.attach_camera(cam_name, cam, franka_name, 'panda_hand', offset_transform=cam_offset_transform)
     scene.setup_all_envs(setup)    
 
-    def custom_draws(scene):
-        for env_idx in scene.env_idxs:
-            ee_transform = franka.get_ee_transform(env_idx, franka_name)
-            ee_transform_8 = franka.get_ee_transform_MARK(env_idx, franka_name, 'panda_hand')
-            ee_transform_0 = franka.get_ee_transform_MARK(env_idx, franka_name, 'panda_link0')
-            ee_transform_1 = franka.get_ee_transform_MARK(env_idx, franka_name, 'panda_link1')
-            ee_transform_2 = franka.get_ee_transform_MARK(env_idx, franka_name, 'panda_link2')
-            ee_transform_3 = franka.get_ee_transform_MARK(env_idx, franka_name, 'panda_link3')
-            ee_transform_4 = franka.get_ee_transform_MARK(env_idx, franka_name, 'panda_link4')
-            
-
-            transforms = [ee_transform, ee_transform_0, ee_transform_1, ee_transform_2, ee_transform_3, ee_transform_4, ee_transform_8]
-            draw_transforms(scene, [env_idx], transforms)
-            cam_transform = cam.get_transform(env_idx, cam_name)
-            draw_camera(scene, [env_idx], cam_transform, length=0.04)
-        draw_contacts(scene, scene.env_idxs)
-
-    # policy = GraspBlockPolicy(franka, franka_name, block, block_name)
-    policy = RRTGraspBlockPolicy(franka, franka_name, block, block_name, wall, wall_name)
-
-    for i in range(1):
-        # sample block poses
-        block_transforms = [gymapi.Transform(p=gymapi.Vec3(
-            0.8, 
-            0,
-            cfg['table']['dims']['sz'] + cfg['block']['dims']['sz'] / 2 + 0.1
-        )) for _ in range(scene.n_envs)]
-
-        # set block poses
-        for env_idx in scene.env_idxs:
-            block.set_rb_transforms(env_idx, block_name, [block_transforms[env_idx]])
-
-        print(f"resetting policy")
-        policy.reset()
-        print(f"running scene again")
-        scene.run(time_horizon=policy.time_horizon, policy=policy, custom_draws=custom_draws)
+    # print(scene.env_idxs)
+    print(wall.sx, wall.sy, wall.sz)
+    print(wall.get_rb_poses_as_np_array(0, wall_name))
+    a = wall.get_rb_poses_as_np_array(0, wall_name)[0, :3]
+    b = np.concatenate((a, np.array([0, 0, 0])))
+    print(b)
+    # b = quaternion.as_euler_angles(np.array([0.999, 0, 0, 0]))
+    # print(b)
+    # print(wall.get_rb_poses_as_np_array(0, wall_name).shape)

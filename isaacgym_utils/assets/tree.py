@@ -33,7 +33,7 @@ class GymTree(GymURDFAsset):
     _VEL_LIMITS = None
 
     # _URDF_PATH = '/home/marklee/github/build_sdf/generated_urdf/tree_pruned.urdf'
-    _URDF_PATH = 'franka_description/robots/tree_full.urdf'
+    _URDF_PATH = '/home/jan-malte/OCRL_project/isaacgym-utils/assets/franka_description/robots/tree_full.urdf'
     # _URDF_PATH = 'franka_description/robots/tree_test.urdf'
 
     @staticmethod

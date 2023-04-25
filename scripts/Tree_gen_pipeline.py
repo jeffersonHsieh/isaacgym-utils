@@ -16,7 +16,7 @@ STEP_WIDTH = 0.25 #determines the lenght of individual tree segments
 HEIGHT_STRECH_VALS = [0.05, 0.10] #[0.5, 0.33, 1] #factors to strech the crown shape of the tree to be non circular
 WIDTH_STRECH_VALS = [1.0, 9.0] #[0.5, 0.33, 1] #factors to strech the crown shape of the tree to be non circular
 ATT_PTS_NUM = [80, 160, 320, 640] #800, 1600, 3200, 6400 number of attraction points
-PATH = "/home/jan-malte/IROS_tree_dataset/isaacgym-utils/dataset"
+PATH = "/home/jan-malte/IROS_tree_dataset/isaacgym-utils/test"
 
 
 yaml_paths = []

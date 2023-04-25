@@ -105,6 +105,114 @@ def import_tree(name_dict, urdf_path, yaml_path, edge_def, stiffness_list, dampi
 
         return force_applied_ 
 
+    def remove_duplicates(vertex_init_pos_list_arg, vertex_final_pos_list_arg, force_applied_list_arg):
+        vertex_init_pos_list_arg = vertex_init_pos_list_arg[:, :7, :].transpose((0,2,1))
+        vertex_final_pos_list_arg = vertex_final_pos_list_arg[:, :7, :].transpose((0,2,1))
+        force_applied_list_arg = force_applied_list_arg.transpose((0,2,1))
+        local_edge_def = np.copy(edge_def)
+        local_coeff_stiff_damp = np.copy(coeff_stiff_damp)
+        print(vertex_init_pos_list_arg[:, :, 3:])
+        print(local_edge_def)
+
+        vertex_init_pos_list_arg, vertex_final_pos_list_arg = shift_quat(vertex_init_pos_list_arg, vertex_final_pos_list_arg)
+        local_edge_def, vertex_init_pos_list_arg, vertex_final_pos_list_arg, force_applied_list_arg, local_coeff_stiff_damp = remove_duplicate_nodes(local_edge_def, vertex_init_pos_list_arg, vertex_final_pos_list_arg, force_applied_list_arg, local_coeff_stiff_damp)
+
+        print(vertex_init_pos_list_arg[:, :, 3:])
+
+        vertex_init_pos_list_arg = vertex_init_pos_list_arg[:, :, :].transpose((0,2,1))
+        vertex_final_pos_list_arg = vertex_final_pos_list_arg[:, :, :].transpose((0,2,1))
+        force_applied_list_arg = force_applied_list_arg.transpose((0,2,1))
+
+
+        return local_edge_def, vertex_init_pos_list_arg, vertex_final_pos_list_arg, force_applied_list_arg, local_coeff_stiff_damp
+
+    def shift_quat(vertex_init_pos_list_arg, vertex_final_pos_list_arg):
+        init_quat_array = vertex_init_pos_list_arg[:,:,3:]
+        final_quat_array = vertex_final_pos_list_arg[:,:,3:]
+        init_quat_array_copy = np.copy(vertex_init_pos_list_arg[:,:,3:])
+        final_quat_array_copy = np.copy(vertex_final_pos_list_arg[:,:,3:])
+        parent_dict = make_parent_dict()
+        legal_indices = range(0,np.shape(vertex_init_pos_list_arg)[1])
+        for index in legal_indices:
+            if index in parent_dict.keys():
+                parent_idx = parent_dict[index]
+                init_quat_array_copy[:,index] = init_quat_array[:,parent_idx]
+                final_quat_array_copy[:,index] = final_quat_array[:,parent_idx]
+        vertex_init_pos_list_arg = np.append(vertex_init_pos_list_arg[:,:,:3], init_quat_array_copy, 2)
+        vertex_final_pos_list_arg = np.append(vertex_final_pos_list_arg[:,:,:3], final_quat_array_copy, 2)
+        return vertex_init_pos_list_arg, vertex_final_pos_list_arg
+
+    def make_parent_dict():
+        parent_dict = {}
+        for parent, child in edge_def:
+            parent_dict[child] = parent
+        return parent_dict
+
+    def remove_duplicate_nodes(edges, init_positions, final_positions, X_force, stiff_damp):
+        tree_representative = init_positions[0]
+        tree_representative = np.around(tree_representative, decimals=4)
+        duplicates = [(0,1)] #treat 0 and 1 as duplicates, as 0 represents the base_link aka the floor, which should behave like the root
+        for i, node in enumerate(tree_representative):
+            for j, nodec in enumerate(tree_representative):
+                if (node[:3] == nodec[:3]).all() and i != j and has_same_parent(i,j,edges): # and has_same_parents(i,j,edges)
+                    if i < j:
+                        duplicates.append((i,j))
+                    else:
+                        duplicates.append((j,i))
+        duplicates = list(set(duplicates))
+        while len(duplicates) > 0:
+            original, duplicate = duplicates.pop()
+            edges, init_positions, final_positions, duplicates, X_force, stiff_damp = remove_duplicate(original, duplicate, edges, init_positions, final_positions, duplicates, X_force, stiff_damp)
+            duplicates = list(set(duplicates))
+            duplicates = adjust_indexing(duplicates, duplicate)
+            edges = adjust_indexing(edges, duplicate)
+        edges = np.array(edges)
+        return edges, init_positions, final_positions, X_force, stiff_damp
+
+    def has_same_parent(i,j,edges):
+        for parent, child in edges:
+            if child == i:
+                parent_i = parent
+            if child == j:
+                parent_j = parent
+        return parent_i == parent_j
+
+    def remove_duplicate(original, duplicate, edge_def, init_positions, final_positions, duplicates, forces, stiff_damp):
+        init_positions = np.delete(init_positions, duplicate, axis=1)
+        final_positions = np.delete(final_positions, duplicate, axis=1)
+
+        new_edge_def = []
+        new_duplicates = []
+        for orig, dup in duplicates:
+            if orig == duplicate:
+                new_duplicates.append((original,dup))
+            elif duplicate != dup and duplicate != orig:
+                new_duplicates.append((orig,dup))
+
+        for parent, child in edge_def:
+            if duplicate == parent:
+                new_edge_def.append((original,child))
+            elif duplicate != parent and duplicate != child:
+                new_edge_def.append((parent,child))
+
+        for idx, force in enumerate(forces):
+            if np.linalg.norm(force[duplicate]) != 0:
+                forces[idx][original] += forces[idx][duplicate]
+        
+        forces = np.delete(forces, duplicate, axis=1)
+        stiff_damp =  np.delete(stiff_damp, duplicate, axis=1)
+
+        return new_edge_def, init_positions, final_positions, new_duplicates, forces, stiff_damp
+
+    def adjust_indexing(tuple_list, deleted_index):
+        new_tuple_list = []
+        for i, j in tuple_list:
+            if i > deleted_index:
+                i = i-1
+            if j > deleted_index:
+                j = j-1
+            new_tuple_list.append((i,j))
+        return new_tuple_list
 
     def save_data(env_idx, vertex_init_pos_list_arg, vertex_final_pos_list_arg, force_applied_list_arg):
         #coeff_stiff_damp = get_stiffness()
@@ -115,22 +223,28 @@ def import_tree(name_dict, urdf_path, yaml_path, edge_def, stiffness_list, dampi
         #force_applied_list.append(force_applied)
 
         #print(len(vertex_final_pos_list))
+        vertex_init_pos_list_arg = np.array(vertex_init_pos_list_arg)
+        vertex_final_pos_list_arg = np.array(vertex_final_pos_list_arg)
+        force_applied_list_arg = np.array(force_applied_list_arg)
 
+        local_edge_def, vertex_init_pos_list_arg, vertex_final_pos_list_arg, force_applied_list_arg, local_coeff_stiff_damp = remove_duplicates(vertex_init_pos_list_arg, vertex_final_pos_list_arg, force_applied_list_arg)
         print(f" ********* saving data ********* ")
         #print(np.shape(vertex_init_pos_list_arg))
         if env_des is not None:
             save(path + '[%s]X_vertex_init_pos_tree%s_env%s'%(tree_pts, tree_num, env_des), vertex_init_pos_list_arg )
-            #save('X_coeff_stiff_damp_tree%s_env%s'%(tree_num, env_idx), coeff_stiff_damp )
-            #save('X_edge_def_tree%s_env%s'%(tree_num, env_idx), edge_def )
             save(path + '[%s]X_force_applied_tree%s_env%s'%(tree_pts, tree_num, env_des), force_applied_list_arg )
             save(path + '[%s]Y_vertex_final_pos_tree%s_env%s'%(tree_pts, tree_num, env_des), vertex_final_pos_list_arg )
         else:
             save(path + '[%s]X_vertex_init_pos_tree%s_env%s'%(tree_pts, tree_num, env_idx), vertex_init_pos_list_arg )
-            #save('X_coeff_stiff_damp_tree%s_env%s'%(tree_num, env_idx), coeff_stiff_damp )
-            #save('X_edge_def_tree%s_env%s'%(tree_num, env_idx), edge_def )
             save(path + '[%s]X_force_applied_tree%s_env%s'%(tree_pts, tree_num, env_idx), force_applied_list_arg )
             save(path + '[%s]Y_vertex_final_pos_tree%s_env%s'%(tree_pts, tree_num, env_idx), vertex_final_pos_list_arg )
 
+        save(path + '[%s]X_coeff_stiff_damp_tree%s'%(tree_pts,tree_num), local_coeff_stiff_damp)
+        save(path + '[%s]X_edge_def_tree%s'%(tree_pts,tree_num), local_edge_def)
+
+        print(np.shape(vertex_init_pos_list_arg))
+        print(np.shape(vertex_final_pos_list_arg))
+        print(np.shape(force_applied_list_arg))
         #print(f"Vinit, Vfinal, Fapplied lengths: {vertex_init_pos_list}")
         #sys.exit() 
 
@@ -177,8 +291,8 @@ def import_tree(name_dict, urdf_path, yaml_path, edge_def, stiffness_list, dampi
     last_timestamp = [0] * scene._n_envs
 
     coeff_stiff_damp = get_stiffness()
-    save(path + '[%s]X_coeff_stiff_damp_tree%s'%(tree_pts,tree_num), coeff_stiff_damp)
-    save(path + '[%s]X_edge_def_tree%s'%(tree_pts,tree_num), edge_def)
+    #save(path + '[%s]X_coeff_stiff_damp_tree%s'%(tree_pts,tree_num), coeff_stiff_damp)
+    #save(path + '[%s]X_edge_def_tree%s'%(tree_pts,tree_num), edge_def)
 
     def policy(scene, env_idx, t_step, t_sim): #TODO: Fix issue where this saves init and final vetor identically
         global rand_idxs, force_vecs, current_pos, last_timestamp, push_switch, done, push_num, last_pos, no_contact, force, loc_tree, random_index, contact_transform, force_vecs, rand_idxs, vertex_init_pos_list, vertex_final_pos_list, force_applied_list, vertex_init_pos, vertex_final_pos, force_applied, not_saved
