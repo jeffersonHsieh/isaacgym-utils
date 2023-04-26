@@ -42,8 +42,8 @@ class RRT:
         self._project_step_size = 1e-1  # Default:1e-1
         self._constraint_th = 1e-3  # Default: 1e-3
 
-        self._q_step_size = 0.1  # Default: 0.01
-        self._target_p = 0.7  # Default: 0.3
+        self._q_step_size = 0.01  # Default: 0.01
+        self._target_p = 0.3  # Default: 0.3
         self._max_n_nodes = int(1e4)
 
     def sample_valid_joints(self):

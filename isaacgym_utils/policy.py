@@ -1,9 +1,12 @@
 from abc import ABC, abstractmethod
+from os import initgroups
 import numpy as np
+import quaternion
 
 from isaacgym import gymapi
+from numpy.core.shape_base import block
 from .math_utils import min_jerk, slerp_quat, vec3_to_np, np_to_vec3, \
-                    project_to_line, compute_task_space_impedance_control
+                    project_to_line, compute_task_space_impedance_control, quat_to_rpy
 
 from .rrt import RRT
 
@@ -155,29 +158,41 @@ class RRTGraspBlockPolicy(Policy):
             self.boxes = np.concatenate((wall_pos, wall_size), axis=1)
             rrt = RRT(self._franka, self.is_in_collision)
             self._init_ee_transforms.append(ee_transform)
-            block_pos = self._block.get_rb_poses_as_np_array(env_idx, self._block_name)[0, :3]
-            block_pos = np.concatenate((block_pos, np.array([0, 0, 0])))
 
-            joints_start = self._franka.INIT_JOINTS[:-2]
-            joints_target = self._franka.inverse_kinematics(block_pos, joints_start)
+            block_pos = self._block.get_rb_poses_as_np_array(env_idx, self._block_name)[0] 
+            block_pos_rpy = np.concatenate((block_pos[:3], np.array([3.14, 0, 0])))
+            print(f'block pos: {block_pos_rpy}')
+
+            joints_start = self._franka.get_joints(env_idx, self._franka_name)[:-2]
+
+            # joints_target = np.array([0, 3.43e-1, 0, -2.235, 0, 2.567, 7.8e-1])
+            joints_target = self._franka.inverse_kinematics(block_pos_rpy, joints_start)
+
+            ee = self._franka.ee(joints_start)
+            print(f'start ee: {ee}')
+            ee = self._franka.ee(joints_target)
+            print(f'target ee: {ee}')
+
             # constraint = self.ee_upright_constraint
             # self.plan = rrt.plan(joints_start, joints_target, constraint)
-            print(joints_start)
-            print(joints_target)
+            print(f'joints_start: {joints_start}')
+            print(f'joints_target: {joints_target}')
             self.plan = rrt.plan(joints_start, joints_target)
+            np.save(f'plan.npy', self.plan)
             self.i = 0
 
             self._ee_waypoint_policies.append(
                 EEImpedanceWaypointPolicy(self._franka, self._franka_name, ee_transform, ee_transform, T=15)
             )
 
-        if t_step % 15 == 0:
+        if t_step > 15 and t_step % 2 == 0:
             # self._init_ee_transforms.append(ee_transform)
             try:
-                self._ee_waypoint_policies[env_idx] = SetJointPolicy(self._franka, self._franka_name, self.plan[self.i], T=15)
+                self._ee_waypoint_policies[env_idx] = SetJointPolicy(self._franka, self._franka_name, np.concatenate([self.plan[self.i], np.ones(2)*0.104]), T=15)
                 self.i += 1
             except:
-                self._ee_waypoint_policies[env_idx] = SetJointPolicy(self._franka, self._franka_name, self.plan[-1], T=15)
+                # self._ee_waypoint_policies[env_idx] = SetJointPolicy(self._franka, self._franka_name, np.concatenate([self.plan[self.i], np.ones(2)*0.104]), T=15)
+                self._franka.close_grippers(env_idx, self._franka_name)
 
         self._ee_waypoint_policies[env_idx](scene, env_idx, t_step, t_sim)
 
@@ -247,19 +262,25 @@ class GraspBlockPolicy(Policy):
         if t_step == 600:
             self._franka.open_grippers(env_idx, self._franka_name)
 
-        if t_step == 700:
-            self._ee_waypoint_policies[env_idx] = \
-                EEImpedanceWaypointPolicy(
-                    self._franka, self._franka_name, self._grasp_transforms[env_idx], self._pre_grasp_transforms[env_idx], T=100
-                )
+        # if t_step == 700:
+        #     self._ee_waypoint_policies[env_idx] = \
+        #         EEImpedanceWaypointPolicy(
+        #             self._franka, self._franka_name, self._grasp_transforms[env_idx], self._pre_grasp_transforms[env_idx], T=100
+        #         )
 
-        if t_step == 800:
-            self._ee_waypoint_policies[env_idx] = \
-                EEImpedanceWaypointPolicy(
-                    self._franka, self._franka_name, self._pre_grasp_transforms[env_idx], self._init_ee_transforms[env_idx], T=100
-                )
+        # if t_step == 800:
+        #     self._ee_waypoint_policies[env_idx] = \
+        #         EEImpedanceWaypointPolicy(
+        #             self._franka, self._franka_name, self._pre_grasp_transforms[env_idx], self._init_ee_transforms[env_idx], T=100
+        #         )
 
         self._ee_waypoint_policies[env_idx](scene, env_idx, t_step, t_sim)
+        print(f'current joint angle: {self._franka.get_joints(env_idx, self._franka_name)[:-2]}')
+        # 0, 3.43e-1, 0, -2.235, 0, 2.567, 7.8e-1
+        # print(f'current p: {ee_transform.p}')
+        # 0.5 0 0.5
+        # print(f'current q: {ee_transform.r}')
+        # 0.5 0 0.5
 
 
 class GraspPointPolicy(Policy):
@@ -416,4 +437,58 @@ class SetJointPolicy(Policy):
         return self._T
 
     def __call__(self, scene, env_idx, t_step, t_sim):
-        self._franka.set_joints(env_idx, self._franka_name, np.concatenate([self._joints, np.zeros(2)]))
+        self._franka.set_joints(env_idx, self._franka_name, self._joints)
+
+
+class FrankaJointController:
+    """
+    returns joint torques to reach target joint positions
+    """
+    def __init__(self, franka, franka_name, tau_factor=1000):
+        self._franka = franka
+        self._franka_name = franka_name
+        self._elbow_joint = 3
+        self._tau_factor = tau_factor
+
+    def compute_tau(self, env_idx, target_joints_pos):
+
+        delta_joints = target_joints_pos - self._franka.get_joints(env_idx, self._franka_name)[:self._franka.num_dof]
+        # self._franka.apply_delta_joint_targets(env_idx, self._name, delta_joints)
+        return self._tau_factor * delta_joints
+
+
+class FrankaJointWayPointPolicy(Policy):
+    """
+    follows a joint trajectory if given, 
+    otherwise linearly interpolates between init and goal joint positions
+    """
+    def __init__(self, franka, franka_name, init_joint_pos, goal_joint_pos, 
+            traj=None,
+            T=300):
+        self._franka = franka
+        self._franka_name = franka_name
+
+        self._T = T
+        self._time_horizon = T
+        self._joint_ctrlr = FrankaJointController(franka, franka_name)
+        if traj is None:
+            self._traj = np.linspace(init_joint_pos, goal_joint_pos, num=T)
+        else:
+            self._traj = traj
+            assert len(traj) == T and len(traj[0]) == 7 \
+                and (traj[0] == init_joint_pos).all() and (traj[-1] == goal_joint_pos).all()
+
+    @property
+    def horizon(self):
+        return self._T
+    @property
+    def time_horizon(self):
+        return self._time_horizon
+
+    def __call__(self, scene, env_idx, t_step, t_sim):
+        target_joint_pos = self._traj[min(t_step, self._T - 1)]
+        tau = self._joint_ctrlr.compute_tau(env_idx, target_joint_pos)
+        self._franka.apply_torque(env_idx, self._franka_name, tau)
+
+
+

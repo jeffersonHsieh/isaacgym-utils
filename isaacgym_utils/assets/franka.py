@@ -1,11 +1,12 @@
 import numpy as np
 from pathlib import Path
 import quaternion
+from scipy.spatial.transform import Rotation as R
 from itertools import product
 
 from isaacgym import gymapi
 from isaacgym_utils.constants import isaacgym_utils_ASSETS_PATH
-from isaacgym_utils.math_utils import transform_to_RigidTransform, vec3_to_np, quat_to_rot, np_to_vec3
+from isaacgym_utils.math_utils import transform_to_RigidTransform, vec3_to_np, quat_to_rot, np_to_vec3, rot_to_np_quat, quat_to_np, angle_axis_between_quats
 
 from .assets import GymURDFAsset
 from .franka_numerical_utils import get_franka_mass_matrix
@@ -21,16 +22,20 @@ class GymFranka(GymURDFAsset):
     _URDF_PATH = 'franka_description/robots/franka_panda.urdf'
     _URDF_PATH_WITH_DYNAMICS = 'franka_description/robots/franka_panda_dynamics.urdf'
 
-    dh_params = np.array([[0, 0.333, 0, 0],
-                                [0, 0, -np.pi/2, 0],
-                                [0, 0.316, np.pi/2, 0],
-                                [0.0825, 0, np.pi/2, 0],
-                                [-0.0825, 0.384, -np.pi/2, 0],
-                                [0, 0, np.pi/2, 0],
-                                [0.088, 0, np.pi/2, 0],
-                                [0, 0.107, 0, 0],
-                                [0, 0.1034, 0, 0]])
-    
+    # a d alpha theta
+    dh_params = np.array([
+                    [0, 0.333, 0, 0],
+                    [0, 0, -np.pi/2, 0],
+                    [0, 0.316, np.pi/2, 0],
+                    [0.0825, 0, np.pi/2, 0],
+                    [-0.0825, 0.384, -np.pi/2, 0],
+                    [0, 0, np.pi/2, 0],
+                    [0.088, 0, np.pi/2, 0],
+                    [0, 0.107, 0, -0.785398163397],
+                    [0, 0.1034, 0, 0]])
+                    # [0.088, 0, np.pi/2, 0],
+                    # [0, 0.107, 0, 0],
+                    # [0, 0.1034, 0, 0]])
 
     _dh_alpha_rot = np.array([
                         [1, 0, 0, 0],
@@ -71,6 +76,7 @@ class GymFranka(GymURDFAsset):
         [0.12, 0.12, 0.2],
         [0.08, 0.22, 0.17]
     ])
+    collision_box_shapes *= 0.6
     _collision_box_links = [1, 1, 1, 1, 1, 3, 4, 5, 5, 5, 7, 7]
     _collision_box_poses_raw = np.array([
         [-.04, 0, -0.283, 1, 0, 0, 0],
@@ -130,6 +136,7 @@ class GymFranka(GymURDFAsset):
             self._attractor_stiffness = cfg['attractor_props']['stiffness']
             self._attractor_damping = cfg['attractor_props']['damping']
         
+    def precompute_self_collision_box_data(self):
         self._collision_boxes_data = np.zeros((len(self.collision_box_shapes), 10))
         self._collision_boxes_data[:, -3:] = self.collision_box_shapes
 
@@ -389,20 +396,55 @@ class GymFranka(GymURDFAsset):
     def reset_joints(self, env_idx, name):
         self.set_joints(env_idx, name, self.INIT_JOINTS)
     
+    def set_base_offset(self, offset):
+        self.base_offset = np.array(offset)
+
     def ee(self, joints):
         '''
         Arguments: array of joint positions (rad)
         Returns: A numpy array that contains the [x, y, z, roll, pitch, yaw] location of the end-effector.
         '''
         fk = self.forward_kinematics(joints)
-        ee_frame = fk[-1,:,:]
+        ee_frame = fk[-2,:,:]
 
         x, y, z = ee_frame[:-1,3]
         roll = np.arctan2(ee_frame[2,1], ee_frame[2,2])
         pitch = np.arcsin(-ee_frame[2,0])
         yaw = np.arctan2(ee_frame[1,0], ee_frame[0,0])
 
-        return np.array([x, y, z, roll, pitch, yaw])
+        # r = R.from_matrix(ee_frame[:3,:3])
+        # r = r.as_euler('xyz')
+
+        # ee = np.array([x, y, z, *r])
+        ee = np.array([x, y, z, roll, pitch, yaw])
+
+        # ee = np.zeros(7)
+        # ee[:3] = ee_frame[:-1,3]
+        # ee[-4:] = rot_to_np_quat(ee_frame[:3,:3]) # x y z w
+
+        ee[:3] += self.base_offset
+
+        return ee
+    
+    def get_links_poses(self, joints):
+        links_poses = []
+        fk = self.forward_kinematics(joints)
+        for i, fk_i in enumerate(fk):
+            frame = fk[i,:,:]
+
+            x, y, z = frame[:-1,3]
+            roll = np.arctan2(frame[2,1], frame[2,2])
+            pitch = np.arcsin(-frame[2,0])
+            yaw = np.arctan2(frame[1,0], frame[0,0])
+
+            link_pose = np.array([x, y, z, roll, pitch, yaw])
+            link_pose[:3] += self.base_offset
+
+            links_poses.append(link_pose)
+        
+        links_poses = np.array(links_poses)
+
+        return links_poses
 
     def jacobian(self, joints):
         '''
@@ -422,6 +464,20 @@ class GymFranka(GymURDFAsset):
 
         return jacobian
 
+    def ee_error(self, desired_ee_pos, current_ee_pos):
+        x_pos = current_ee_pos[:3]
+        x_quat = quaternion.from_euler_angles(current_ee_pos[-3:])
+
+        xd_pos = desired_ee_pos[:3]
+        xd_quat = quaternion.from_euler_angles(desired_ee_pos[-3:])
+
+        xe_pos = x_pos - xd_pos
+        xe_ang_axis = angle_axis_between_quats(x_quat, xd_quat)
+        ee_error = np.concatenate([xe_pos, xe_ang_axis])
+        
+        return ee_error
+
+
     def inverse_kinematics(self, desired_ee_pos, current_joints):
         '''
         Arguments: desired_ee_pos which is a np array of [x, y, z, r, p, y] which represent the desired end-effector position of the robot
@@ -430,16 +486,28 @@ class GymFranka(GymURDFAsset):
         '''
         joints = current_joints.copy()
         current_ee_pos = self.ee(joints)
-        ee_error = desired_ee_pos - current_ee_pos
-        alpha = 0.1
 
-        while np.linalg.norm(ee_error) > 1e-3:
+        ee_error = desired_ee_pos - current_ee_pos
+        # ee_error = self.ee_error(desired_ee_pos, current_ee_pos)
+
+        alpha = 0.01
+
+        for i in range(10000):
             jacob = self.jacobian(joints)
             joints += alpha * jacob.T.dot(ee_error.T)
+            # joints -= alpha * np.linalg.pinv(jacob).dot(ee_error.T)
             
             current_ee_pos = self.ee(joints)
             ee_error = desired_ee_pos - current_ee_pos
+            # ee_error = self.ee_error(desired_ee_pos, current_ee_pos)
+            if np.linalg.norm(ee_error) < 1e-3:
+                print(f'IK solved, pos: {current_ee_pos}')
+                print(np.linalg.norm(ee_error))
+                return joints
 
+        print('cannot solve inverse kinematics for target pose')
+        print(f'current pos: {current_ee_pos}')
+        print(np.linalg.norm(ee_error))
         return joints
 
     def forward_kinematics(self, joints):
@@ -529,11 +597,27 @@ class GymFranka(GymURDFAsset):
 
     def get_collision_boxes_poses(self, joints):
         fk = self.forward_kinematics(joints)
+        # print(fk)
 
         box_poses_world = []
         for i, link in enumerate(self._collision_box_links):
             link_transform = fk[link - 1]
             box_pose_world = link_transform.dot(self._collision_box_poses[i])
+            box_pose_world[:3, 3] += self.base_offset
             box_poses_world.append(box_pose_world)
 
         return box_poses_world
+
+        # code for checking if each transform is consistent with isaac's answer 
+        # fr_links_poses = self._franka.get_links_poses(joints_start)
+        # isaac_link_transforms = self._franka.get_rb_transforms(env_idx, self._franka_name)
+        # for i in range(len(fr_links_poses)):
+        #     print(f'joint {i}')
+        #     print('fr')
+        #     print(fr_links_poses[i])
+        #     print('iasac')
+        #     print(isaac_link_transforms[i+1].p)
+        #     print(isaac_link_transforms[i+1].r)
+
+        # joints_target = np.array([0.0, 5e-1, 0.0, -2.3, 0.0, 2.8, 7.8e-1])
+        # joints_target = np.array([0, 3.43e-1, 0, -2.235, 0, 2.567, 7.8e-1])

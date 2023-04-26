@@ -8,7 +8,7 @@ from isaacgym_utils.scene import GymScene
 from isaacgym_utils.assets import GymFranka, GymBoxAsset
 from isaacgym_utils.camera import GymCamera
 from isaacgym_utils.math_utils import RigidTransform_to_transform
-from isaacgym_utils.policy import GraspBlockPolicy, RRTGraspBlockPolicy
+from isaacgym_utils.policy import GraspBlockPolicy, RRTGraspBlockPolicy,FrankaJointWayPointPolicy
 from isaacgym_utils.draw import draw_transforms, draw_contacts, draw_camera
 
 import pdb
@@ -39,8 +39,8 @@ if __name__ == "__main__":
 
     table_transform = gymapi.Transform(p=gymapi.Vec3(cfg['table']['dims']['sx']/3, 0, cfg['table']['dims']['sz']/2))
     franka_transform = gymapi.Transform(p=gymapi.Vec3(0, 0, cfg['table']['dims']['sz'] + 0.01))
-    wall_transform = gymapi.Transform(p=gymapi.Vec3(0.35, 0, cfg['wall']['dims']['sz']/2 + cfg['table']['dims']['sz'] + 0.1))
-    block_transform = gymapi.Transform(p=gymapi.Vec3(0.55, 0, cfg['table']['dims']['sz'] + cfg['block']['dims']['sz'] / 2 + 0.1))
+    wall_transform = gymapi.Transform(p=gymapi.Vec3(0.2, 0, cfg['wall']['dims']['sz']/2 + cfg['table']['dims']['sz'] + 0.1))
+    block_transform = gymapi.Transform(p=gymapi.Vec3(0.5, 0, cfg['table']['dims']['sz'] + cfg['block']['dims']['sz'] / 2 + 0.1))
     
     # change the collision box in franka robot
     franka.set_base_offset([0, 0, cfg['table']['dims']['sz'] + 0.01])
@@ -83,8 +83,9 @@ if __name__ == "__main__":
         draw_contacts(scene, scene.env_idxs)
 
     # policy = GraspBlockPolicy(franka, franka_name, block, block_name)
-    policy = RRTGraspBlockPolicy(franka, franka_name, block, block_name, wall, wall_name)
-
+    # policy = RRTGraspBlockPolicy(franka, franka_name, block, block_name, wall, wall_name)
+    traj = np.load('plan.npy')
+    policy = FrankaJointWayPointPolicy(franka,franka_name,traj[0],traj[-1],traj=traj,T=len(traj))
     for i in range(1):
         # sample block poses
         # block_transforms = [gymapi.Transform(p=gymapi.Vec3(
