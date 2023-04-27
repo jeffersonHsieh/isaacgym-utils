@@ -160,7 +160,7 @@ class RRTGraspBlockPolicy(Policy):
             self._init_ee_transforms.append(ee_transform)
 
             block_pos = self._block.get_rb_poses_as_np_array(env_idx, self._block_name)[0] 
-            block_pos_rpy = np.concatenate((block_pos[:3], np.array([3.14, 0, 0])))
+            block_pos_rpy = np.concatenate((block_pos[:3], np.array([np.pi, 0, np.pi/2])))
             print(f'block pos: {block_pos_rpy}')
 
             joints_start = self._franka.get_joints(env_idx, self._franka_name)[:-2]
@@ -190,7 +190,7 @@ class RRTGraspBlockPolicy(Policy):
             try:
                 self._ee_waypoint_policies[env_idx] = SetJointPolicy(self._franka, self._franka_name, np.concatenate([self.plan[self.i], np.ones(2)*0.104]), T=15)
                 self.i += 1
-            except:
+            except IndexError:
                 # self._ee_waypoint_policies[env_idx] = SetJointPolicy(self._franka, self._franka_name, np.concatenate([self.plan[self.i], np.ones(2)*0.104]), T=15)
                 self._franka.close_grippers(env_idx, self._franka_name)
 
@@ -439,12 +439,11 @@ class SetJointPolicy(Policy):
     def __call__(self, scene, env_idx, t_step, t_sim):
         self._franka.set_joints(env_idx, self._franka_name, self._joints)
 
-
 class FrankaJointController:
     """
     returns joint torques to reach target joint positions
     """
-    def __init__(self, franka, franka_name, tau_factor=1000):
+    def __init__(self, franka, franka_name, tau_factor=10):
         self._franka = franka
         self._franka_name = franka_name
         self._elbow_joint = 3
@@ -453,6 +452,7 @@ class FrankaJointController:
     def compute_tau(self, env_idx, target_joints_pos):
 
         delta_joints = target_joints_pos - self._franka.get_joints(env_idx, self._franka_name)[:self._franka.num_dof]
+        # print(delta_joints)
         # self._franka.apply_delta_joint_targets(env_idx, self._name, delta_joints)
         return self._tau_factor * delta_joints
 
@@ -464,13 +464,14 @@ class FrankaJointWayPointPolicy(Policy):
     """
     def __init__(self, franka, franka_name, init_joint_pos, goal_joint_pos, 
             traj=None,
+            tau_factor=10,
             T=300):
         self._franka = franka
         self._franka_name = franka_name
 
         self._T = T
         self._time_horizon = T
-        self._joint_ctrlr = FrankaJointController(franka, franka_name)
+        self._joint_ctrlr = FrankaJointController(franka, franka_name,tau_factor)
         if traj is None:
             self._traj = np.linspace(init_joint_pos, goal_joint_pos, num=T)
         else:
@@ -491,4 +492,46 @@ class FrankaJointWayPointPolicy(Policy):
         self._franka.apply_torque(env_idx, self._franka_name, tau)
 
 
+class RRTFollowingPolicy(Policy):
+    def __init__(self, franka, franka_name, traj, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._franka = franka
+        self._franka_name = franka_name
+
+        self._traj = traj
+        self._time_horizon = 1000
+        self.WAYPT_DURATION = 100
+        self.INCREASE_TAU_THRESHOLD = 1
+        self.INIT_TAU_FACTOR = 10
+        self.reset()
+
+
+    def reset(self):
+        self._joint_pos = []
+
+        self._joint_waypoint_policies = []
+
+
+    def __call__(self, scene, env_idx, t_step, t_sim):
+        tgt_joint_pos = self._traj[min(t_step, self._time_horizon - 1)]
+        joint_pos = self._franka.get_joints(env_idx, self._franka_name)[:self._franka.num_dof]
+        self._joint_pos.append(joint_pos)
+        # initialize a waypoint policy
+        if t_step == 0:
+            self._joint_waypoint_policies = [FrankaJointWayPointPolicy(self._franka, 
+            self._franka_name, joint_pos, tgt_joint_pos, 
+            tau_factor = self.INIT_TAU_FACTOR, T=self.WAYPT_DURATION)]
+        
+        # check every WAYPT_DURATION steps to update the waypoint policy
+        elif t_step % self.WAYPT_DURATION == 0:
+            exp_init_joint_pos = self._traj[min(t_step-1, self._time_horizon - 1)]
+            diff = np.linalg.norm(joint_pos-exp_init_joint_pos)
+            # use a bigger gain (tau_factor) if the starting position is far 
+            # from the expected starting position
+            tau_factor = self.INIT_TAU_FACTOR #* (1+diff/self.INCREASE_TAU_THRESHOLD)
+            self._joint_waypoint_policies[env_idx] = FrankaJointWayPointPolicy(self._franka,
+             self._franka_name, joint_pos, tgt_joint_pos, tau_factor=tau_factor, T=self.WAYPT_DURATION)
+
+        # call the actual policy to apply torque
+        self._joint_waypoint_policies[env_idx](scene, env_idx, t_step, t_sim)
 

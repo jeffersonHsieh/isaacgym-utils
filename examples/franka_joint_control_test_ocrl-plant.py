@@ -8,7 +8,7 @@ from isaacgym_utils.scene import GymScene
 from isaacgym_utils.assets import GymFranka, GymBoxAsset
 from isaacgym_utils.camera import GymCamera
 from isaacgym_utils.math_utils import RigidTransform_to_transform
-from isaacgym_utils.policy import GraspBlockPolicy, RRTGraspBlockPolicy,FrankaJointWayPointPolicy
+from isaacgym_utils.policy import GraspBlockPolicy, RRTGraspBlockPolicy,FrankaJointWayPointPolicy,RRTFollowingPolicy
 from isaacgym_utils.draw import draw_transforms, draw_contacts, draw_camera
 
 import pdb
@@ -84,8 +84,11 @@ if __name__ == "__main__":
 
     # policy = GraspBlockPolicy(franka, franka_name, block, block_name)
     # policy = RRTGraspBlockPolicy(franka, franka_name, block, block_name, wall, wall_name)
-    traj = np.load('plan.npy')
-    policy = FrankaJointWayPointPolicy(franka,franka_name,traj[0],traj[-1],traj=traj,T=len(traj))
+    traj = np.load('plan-correct.npy')
+    policy = FrankaJointWayPointPolicy(franka,franka_name,traj[0],traj[-1],traj=traj,T=len(traj),tau_factor=10)
+    # policy = RRTFollowingPolicy(franka,franka_name,traj=traj)
+    
+    # import pdb;pdb.set_trace()
     for i in range(1):
         # sample block poses
         # block_transforms = [gymapi.Transform(p=gymapi.Vec3(

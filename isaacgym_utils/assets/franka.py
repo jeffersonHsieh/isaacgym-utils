@@ -76,7 +76,7 @@ class GymFranka(GymURDFAsset):
         [0.12, 0.12, 0.2],
         [0.08, 0.22, 0.17]
     ])
-    collision_box_shapes *= 0.6
+    collision_box_shapes *= 0.3
     _collision_box_links = [1, 1, 1, 1, 1, 3, 4, 5, 5, 5, 7, 7]
     _collision_box_poses_raw = np.array([
         [-.04, 0, -0.283, 1, 0, 0, 0],
@@ -487,19 +487,19 @@ class GymFranka(GymURDFAsset):
         joints = current_joints.copy()
         current_ee_pos = self.ee(joints)
 
-        ee_error = desired_ee_pos - current_ee_pos
-        # ee_error = self.ee_error(desired_ee_pos, current_ee_pos)
+        # ee_error = desired_ee_pos - current_ee_pos
+        ee_error = self.ee_error(desired_ee_pos, current_ee_pos)
 
-        alpha = 0.01
+        alpha = 0.1
 
         for i in range(10000):
             jacob = self.jacobian(joints)
-            joints += alpha * jacob.T.dot(ee_error.T)
-            # joints -= alpha * np.linalg.pinv(jacob).dot(ee_error.T)
+            # joints += alpha * jacob.T.dot(ee_error.T)
+            joints -= alpha * np.linalg.pinv(jacob).dot(ee_error.T)
             
             current_ee_pos = self.ee(joints)
-            ee_error = desired_ee_pos - current_ee_pos
-            # ee_error = self.ee_error(desired_ee_pos, current_ee_pos)
+            # ee_error = desired_ee_pos - current_ee_pos
+            ee_error = self.ee_error(desired_ee_pos, current_ee_pos)
             if np.linalg.norm(ee_error) < 1e-3:
                 print(f'IK solved, pos: {current_ee_pos}')
                 print(np.linalg.norm(ee_error))
