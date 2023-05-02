@@ -76,7 +76,7 @@ class GymFranka(GymURDFAsset):
         [0.12, 0.12, 0.2],
         [0.08, 0.22, 0.17]
     ])
-    collision_box_shapes *= 0.3
+    collision_box_shapes *= 0.2
     _collision_box_links = [1, 1, 1, 1, 1, 3, 4, 5, 5, 5, 7, 7]
     _collision_box_poses_raw = np.array([
         [-.04, 0, -0.283, 1, 0, 0, 0],

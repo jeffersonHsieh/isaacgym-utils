@@ -56,15 +56,15 @@ table:
 wall:
   dims:
     sx: 0.05
-    sy: 0.1
-    sz: 0.2
+    sy: 0.15
+    sz: 0.33
   shape_props:
     friction: 0.2
     rolling_friction: 0.01
     torsion_friction: 0.01
     thickness: 2e-3
   rb_props:
-    flags: none # can be none, no_sim, no_gravity
+    flags: no_gravity # can be none, no_sim, no_gravity
     color: [0.7, 0.2, 0.2]
   asset_options:
     density: 1000
@@ -80,7 +80,7 @@ block:
     torsion_friction: 0.01
     thickness: 2e-3
   rb_props:
-    flags: no_gravity
+    flags: no_gravity # can be none, no_sim, no_gravity
     color: [0.2, 0.7, 0.2]
   asset_options:
     density: 1000

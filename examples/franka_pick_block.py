@@ -39,8 +39,8 @@ if __name__ == "__main__":
 
     table_transform = gymapi.Transform(p=gymapi.Vec3(cfg['table']['dims']['sx']/3, 0, cfg['table']['dims']['sz']/2))
     franka_transform = gymapi.Transform(p=gymapi.Vec3(0, 0, cfg['table']['dims']['sz'] + 0.01))
-    wall_transform = gymapi.Transform(p=gymapi.Vec3(0.35, 0, cfg['wall']['dims']['sz']/2 + cfg['table']['dims']['sz'] + 0.1))
-    block_transform = gymapi.Transform(p=gymapi.Vec3(0.55, 0, cfg['table']['dims']['sz'] + cfg['block']['dims']['sz'] / 2 + 0.1))
+    wall_transform = gymapi.Transform(p=gymapi.Vec3(0.35, 0, 0.65))
+    block_transform = gymapi.Transform(p=gymapi.Vec3(0.55, 0, 0.04+cfg['table']['dims']['sz'] + cfg['block']['dims']['sz'] / 2 + 0.1))
     
     # change the collision box in franka robot
     franka.set_base_offset([0, 0, cfg['table']['dims']['sz'] + 0.01])
@@ -61,7 +61,7 @@ if __name__ == "__main__":
         scene.add_asset(franka_name, franka, franka_transform, collision_filter=1) # avoid self-collisions
         # scene.add_asset(block_name, block, gymapi.Transform()) # we'll sample block poses later
         scene.add_asset(wall_name, wall, wall_transform)
-        scene.add_asset(block_name, block, block_transform)
+        scene.add_asset(block_name, block, block_transform, collision_filter=1)
         scene.attach_camera(cam_name, cam, franka_name, 'panda_hand', offset_transform=cam_offset_transform)
     scene.setup_all_envs(setup)    
 

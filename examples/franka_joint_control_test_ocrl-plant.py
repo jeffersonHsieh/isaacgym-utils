@@ -16,6 +16,7 @@ import pdb
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('--cfg', '-c', type=str, default='/home/jan-malte/OCRL_project/isaacgym-utils/cfg/franka_pick_block.yaml')
+    parser.add_argument('--tauf', type=int, default=10)
     args = parser.parse_args()
     cfg = YamlConfig(args.cfg)
 
@@ -85,7 +86,7 @@ if __name__ == "__main__":
     # policy = GraspBlockPolicy(franka, franka_name, block, block_name)
     # policy = RRTGraspBlockPolicy(franka, franka_name, block, block_name, wall, wall_name)
     traj = np.load('plan-correct.npy')
-    policy = FrankaJointWayPointPolicy(franka,franka_name,traj[0],traj[-1],traj=traj,T=len(traj),tau_factor=10)
+    policy = FrankaJointWayPointPolicy(franka,franka_name,traj[0],traj[-1],traj=traj,T=len(traj),tau_factor=args.tauf)
     # policy = RRTFollowingPolicy(franka,franka_name,traj=traj)
     
     # import pdb;pdb.set_trace()
