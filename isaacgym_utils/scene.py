@@ -1,7 +1,7 @@
 from copy import deepcopy
 import numpy as np
 from numba import jit
-from isaacgym import gymapi, gymtorch
+from isaacgym import gymapi#, gymtorch
 import torch
 
 from .math_utils import np_to_vec3
