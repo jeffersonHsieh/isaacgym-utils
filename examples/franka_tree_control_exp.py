@@ -20,6 +20,7 @@ if __name__ == "__main__":
     parser.add_argument('--kd',default=1,type=float)
     parser.add_argument('--log_file',default=None,type=Path)
     parser.add_argument('--traj',default="plan-correct.npy",type=Path)
+    parser.add_argument('--time_horizon',default=1000,type=int)
     args = parser.parse_args()
     cfg = YamlConfig(args.cfg)
 
@@ -112,7 +113,7 @@ if __name__ == "__main__":
         print(f"resetting policy")
         policy.reset()
         print(f"running scene again")
-        scene.run(time_horizon=1000, policy=policy, custom_draws=custom_draws)
+        scene.run(time_horizon=args.time_horizon, policy=policy, custom_draws=custom_draws)
     print("Goal joint state (degs)", np.degrees(traj[-1]))
     print("Goal ee pos", franka.ee(traj[-1]))
     print("Actual joint states (degs)",np.degrees(policy.actual_traj[-1]))
@@ -124,6 +125,6 @@ if __name__ == "__main__":
 
     if args.log_file!=None:
         with args.log_file.open("a+") as f:
-            f.write(f"{traj.name},{args.kp},{args.kd},{ee_error}\n")
+            f.write(f"{args.traj.name},{args.kp},{args.kd},{ee_error}\n")
     
     assert np.linalg.norm(franka.ee(policy.actual_traj[-1])[:3] - franka.ee(traj[-1])[:3]) < 0.01
