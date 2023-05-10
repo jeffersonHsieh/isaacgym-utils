@@ -26,8 +26,8 @@ class GymVarTree(GymURDFAsset):
         return (env_idx, name)
 
     def __init__(self, cfg, urdf_path, name_dict, *args, actuation_mode='joints'):
-        assets_root = Path(urdf_path[:5])
-        urdf_path = urdf_path[6:]
+        assets_root,urdf_path = urdf_path.split("/",1)
+        assets_root = Path(assets_root)
 
         super().__init__(urdf_path, *args,
                         shape_props=cfg['shape_props'],

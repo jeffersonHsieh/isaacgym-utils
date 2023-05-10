@@ -70,8 +70,8 @@ def get_grabbable_tree_links():
 # ====================================================================================================
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    # parser.add_argument('--cfg', '-c', type=str, default='cfg/franka_tree.yaml')
-    parser.add_argument('--cfg', '-c', type=str, default='/home/jan-malte/OCRL_project/isaacgym-utils/cfg/franka_tree_force_ocrl.yaml')
+    parser.add_argument('--cfg', '-c', type=str, default='../cfg/franka_tree.yaml')
+    # parser.add_argument('--cfg', '-c', type=str, default='../cfg/franka_tree_force_ocrl.yaml')
 
     args = parser.parse_args()
     cfg = YamlConfig(args.cfg)
@@ -82,6 +82,7 @@ if __name__ == "__main__":
 
     franka = GymFranka(cfg['franka'], scene, actuation_mode='joints')
     tree = GymTree(cfg['tree'], scene, actuation_mode='joints')
+
     block = GymBoxAsset(scene, **cfg['block']['dims'], 
                         shape_props=cfg['block']['shape_props'], 
                         rb_props=cfg['block']['rb_props'],
@@ -174,6 +175,7 @@ if __name__ == "__main__":
 
         # plan = np.linspace(start_joint, target_joint, 200)
         # policy._plan = plan
+
 
         policy.reset()
         scene.run(time_horizon=policy.time_horizon, policy=policy)

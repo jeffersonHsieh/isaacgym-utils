@@ -1,7 +1,7 @@
 from copy import deepcopy
 import numpy as np
 from numba import jit
-from isaacgym import gymapi, gymtorch
+from isaacgym import gymapi#, gymtorch
 import torch
 
 from .math_utils import np_to_vec3
@@ -14,6 +14,9 @@ class GymScene:
     def __init__(self, cfg):
         self._gym, self._sim, self._physics_engine = make_gym(cfg['gym'])
         self._use_gpu_pipeline = self._gym.get_sim_params(self._sim).use_gpu_pipeline
+################################################ TEMP!!!!
+        self._use_gpu_pipeline = False
+################################################
         self._n_envs = cfg['n_envs']
         self._gui = cfg['gui']
         self._dt = cfg['gym']['dt']
