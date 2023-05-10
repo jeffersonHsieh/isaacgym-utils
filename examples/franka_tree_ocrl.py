@@ -157,7 +157,7 @@ if __name__ == "__main__":
     # # for i, offset in enumerate(offsets):
     # # for i in range(len(rrt_success)):
     # for i, naive_success_ in enumerate(naive_success):
-    for i in range(20):
+    for i in range(1):
         print('-'*50)
         print(f'exp {i}')
         # start_joint = home_joint + offset
@@ -180,7 +180,7 @@ if __name__ == "__main__":
         #rt_successes.append(policy.plan)
         # breakpoint()
 
-    rrt_successes = np.array(rrt_successes)
-    np.save(f'rrt_success0.npy', rrt_successes)
+    # rrt_successes = np.array(rrt_successes)
+    # np.save(f'rrt_success0.npy', rrt_successes)
 
     
