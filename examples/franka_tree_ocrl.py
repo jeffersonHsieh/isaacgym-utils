@@ -1,4 +1,5 @@
 import argparse
+from numba.core.types.scalars import EnumMember
 
 import numpy as np
 from numpy import save 
@@ -19,227 +20,13 @@ from isaacgym_utils.scene import GymScene
 from isaacgym_utils.assets import GymFranka, GymBoxAsset
 from isaacgym_utils.assets import GymTree
 from isaacgym_utils.camera import GymCamera
-from isaacgym_utils.math_utils import RigidTransform_to_transform, np_to_vec3, vec3_to_np, quat_to_np
+from isaacgym_utils.math_utils import RigidTransform_to_transform, np_to_vec3, vec3_to_np, quat_to_np, rot_to_quat
 from isaacgym_utils.policy import GraspBlockPolicy, MoveBlockPolicy, GraspTreePolicy, RRTTreeFollowingPolicy
 from isaacgym_utils.draw import draw_transforms, draw_contacts, draw_camera, draw_spheres
 import pdb
 import sys
 
-def draw_box(XYZ_center, LWH_list):
-    '''
-    XYZ_center: list of center points for each box
-    LWH_list: length, width, height for each box
-    output: plot 3D of each box with center point and rotation
-    '''
-
-    # Create a 3D plot
-    fig = plt.figure()
-    ax = fig.add_subplot(111, projection='3d')
-   
-    # Plot each box
-    for center, LWH in zip(XYZ_center, LWH_list):
-        x, y, z = center
-        l, w, h = LWH
-       
-        # Define the vertices of the box
-        vertices = [[x - l/2, y - w/2, z - h/2],
-                    [x - l/2, y + w/2, z - h/2],
-                    [x + l/2, y + w/2, z - h/2],
-                    [x + l/2, y - w/2, z - h/2],
-                    [x - l/2, y - w/2, z + h/2],
-                    [x - l/2, y + w/2, z + h/2],
-                    [x + l/2, y + w/2, z + h/2],
-                    [x + l/2, y - w/2, z + h/2]]
-       
-        # Define the faces of the box
-        faces = [[0,1,2,3],
-                 [0,1,5,4],
-                 [1,2,6,5],
-                 [2,3,7,6],
-                 [3,0,4,7],
-                 [4,5,6,7]]
-       
-
-        print(f"vertices: {vertices}")
-        print(f"faces: {faces}")
-        poly3d_list = []
-        for face in faces:
-            
-            verticies_list = []
-            for edge in face:
-                verticies_list.append(vertices[edge])
-
-            print(f"for face {face} ,verticies_list: {verticies_list}")
-            poly3d_list.append(verticies_list)
-
-
-        obj = Poly3DCollection(poly3d_list,facecolors='blue', linewidths=1, edgecolors='black', alpha=.25)
-        print(f"obj: {obj} ")
-
-
-        # Plot the box
-        ax.add_collection3d(obj)
-       
-    # Set the limits for the plot
-    ax.set_xlim3d(-1, 1)
-    ax.set_ylim3d(-1, 1)
-    ax.set_zlim3d(0, 1)
-   
-    # Set the labels for the axes
-    ax.set_xlabel('X')
-    ax.set_ylabel('Y')
-    ax.set_zlabel('Z')
-   
-    # Show the plot
-    plt.show()
-
-
-def draw_box_rotation(XYZ_center, RPY_list, LWH_list):
-    '''
-    XYZ_center: list of center points for each box
-    RPY_list: angle rotation in radians for each box
-    LWH_list: length, width, height for each box
-    output: plot 3D of each box with center point and rotation
-    '''
-
-    # Create a 3D plot
-    fig = plt.figure()
-    ax = fig.add_subplot(111, projection='3d')
-   
-    # Plot each box
-    for center, RPY, LWH in zip(XYZ_center, RPY_list, LWH_list):
-        x, y, z = center
-        l, w, h = LWH
-
-        # convert RPY radians to degrees
-        RPY_deg = [np.rad2deg(RPY[0]), np.rad2deg(RPY[1]), np.rad2deg(RPY[2])]
-        # print(f"RPY: {RPY_deg}")
-       
-        # Define the vertices of the box
-        vertices = [[x - l/2, y - w/2, z - h/2],
-                    [x - l/2, y + w/2, z - h/2],
-                    [x + l/2, y + w/2, z - h/2],
-                    [x + l/2, y - w/2, z - h/2],
-                    [x - l/2, y - w/2, z + h/2],
-                    [x - l/2, y + w/2, z + h/2],
-                    [x + l/2, y + w/2, z + h/2],
-                    [x + l/2, y - w/2, z + h/2]]
-       
-        # Convert the RPY angles to a rotation matrix
-        R = Rotation.from_euler( seq = 'xyz', angles= [RPY[0], RPY[1], RPY[2]], degrees=False )
-
-        # convert spatial transform object to np matrix
-        R = R.as_matrix()
-       
-        # Rotate the vertices of the box
-        vertices_rotated = []
-        for vertex in vertices:
-            # offset vertex by center by doing np subtraction
-            centerd_vertex = np.array(vertex) - np.array(center)
-            transformed_vertex = R.dot(centerd_vertex)
-            vertex_rotated = transformed_vertex + center
-            vertices_rotated.append(vertex_rotated)
-
-        # Define the faces of the box
-        faces = [[0,1,2,3],
-                 [0,1,5,4],
-                 [1,2,6,5],
-                 [2,3,7,6],
-                 [3,0,4,7],
-                 [4,5,6,7]]
-       
-
-        # print(f"vertices: {vertices_rotated}")
-        # print(f"faces: {faces}")
-        poly3d_list = []
-        for face in faces:
-            
-            verticies_list = []
-            for edge in face:
-                verticies_list.append(vertices_rotated[edge])
-
-            # print(f"for face {face} ,verticies_list: {verticies_list}")
-            poly3d_list.append(verticies_list)
-
-
-        obj = Poly3DCollection(poly3d_list,facecolors='blue', linewidths=1, edgecolors='black', alpha=.25)
-
-
-        # Plot the box
-        ax.add_collection3d(obj)
-       
-    # Set the limits for the plot
-    ax.set_xlim3d(-1, 1)
-    ax.set_ylim3d(-1, 1)
-    ax.set_zlim3d(0, 1)
-   
-    # Set the labels for the axes
-    ax.set_xlabel('X')
-    ax.set_ylabel('Y')
-    ax.set_zlabel('Z')
-   
-    # Show the plot
-    plt.show()
-
-    
-
-
-
-def visualize_box_collision_for_tree():
-    #load npy file for box collision
-    filename = '/home/mark/course/16745_orcl/OCRL_project_treemanipulate/isaacgym-utils-ocrl/assets/franka_description/robots/tree0_box_link.npy'
-    box_link_np = np.load(filename)
-    print(f"box_link_np shape {box_link_np.shape} ")
-    edge_def = [(0, 1), (1, 2), (1, 3), (1, 4), (2, 5), (2, 6), (3, 7), (5, 8), (4, 9), (7, 10), (8, 11), (6, 12), (9, 13), (10, 14)] #hardcoded for tree0
-
-    XYZ_offset_list = []
-    RPY_list = []
-    LWH_list = []
-    
-
-    num_links = box_link_np.shape[0]
-    #append to list by reading from box_link_np
-    for i in range(num_links):
-        # print(f" box_link_np[{i}]: {box_link_np[i,0:3]} ")
-        XYZ_offset_list.append(box_link_np[i,0:3])
-        RPY_list.append(box_link_np[i,3:6])
-        LWH_list.append(box_link_np[i,6:9])
-
-
-    # since box_link_np is cenetered in parent branch farme, need to get the world coordinate of each link and then add the box_link_np[i] to it
-    grabbable_link_indices, grabbable_link_poses = get_grabbable_tree_links()
-
-    x = grabbable_link_poses[0,:]
-    y = grabbable_link_poses[1,:]
-    z = grabbable_link_poses[2,:]
-    
-
-    num_of_grabbable_links = grabbable_link_poses.shape[1]
-    print(f"num_of_grabbable_links: {num_of_grabbable_links}")
-
-    initx_array = np.zeros((3,num_of_grabbable_links))
-
-    XYZ_center = []
-    for i in range(num_of_grabbable_links):
-        x[i] = x[i] + box_link_np[i,0]
-        y[i] = y[i] + box_link_np[i,1]
-        z[i] = z[i] + box_link_np[i,2]
-        print(f" xyz of link {i} is {x[i]}, {y[i]}, {z[i]} ")
-        XYZ_center.append([x[i],y[i],z[i]])
-
-        # initx_array[0,i] = x[i]
-        # initx_array[1,i] = y[i]
-        # initx_array[2,i] = z[i]
-
-    draw_box_rotation(XYZ_center, RPY_list, LWH_list)
-    # draw_box(XYZ_center, LWH_list)
-    
-
-    
-
-    
-    sys.exit()
-
+from collections import OrderedDict
 
 def get_link_poses():
     vertex_pos = np.zeros((7,tree.num_links)) #x,y,z,qx,qy,qz,qw
@@ -293,29 +80,20 @@ if __name__ == "__main__":
     scene = GymScene(cfg['scene'])
 
 
-    franka = GymFranka(cfg['franka'], scene, actuation_mode='torques')
+    franka = GymFranka(cfg['franka'], scene, actuation_mode='joints')
     tree = GymTree(cfg['tree'], scene, actuation_mode='joints')
-
-    wall = GymBoxAsset(scene, **cfg['wall']['dims'], 
-                        shape_props=cfg['wall']['shape_props'],
-                        rb_props=cfg['wall']['rb_props'],
-                        asset_options=cfg['wall']['asset_options']
-                        )
     block = GymBoxAsset(scene, **cfg['block']['dims'], 
                         shape_props=cfg['block']['shape_props'], 
                         rb_props=cfg['block']['rb_props'],
                         asset_options=cfg['block']['asset_options']
                         )
 
-    wall_transform = gymapi.Transform(p=gymapi.Vec3(-0.1, 0.1, 0.1))
     franka_transform = gymapi.Transform(p=gymapi.Vec3(-0.5, 0, 0))
-    tree_transform = gymapi.Transform(p=gymapi.Vec3(0, 0, 0))
-    block_transform = gymapi.Transform(p=gymapi.Vec3(0.3, 0, 0.5))
+    tree_transform = gymapi.Transform(p=gymapi.Vec3(0, 0, 0), r=gymapi.Quat(0, 0, 0.707, 0.707))
+    block_transform = gymapi.Transform(p=gymapi.Vec3(0, 0, 0.1))
+    franka.set_base_offset([-0.5, 0, 0])
 
-    franka.set_base_offset([-0.4, 0, 0])
-    franka.precompute_self_collision_box_data()
-
-    franka_name, tree_name, block_name, wall_name = 'franka', 'tree', 'block', 'wall'
+    franka_name, tree_name, block_name = 'franka', 'tree', 'block'
 
     current_iteration = 0
     num_iteration = 100
@@ -335,42 +113,74 @@ if __name__ == "__main__":
         scene.add_asset(franka_name, franka, franka_transform, collision_filter=0) # avoid self-collisions
 
         scene.add_asset(tree_name, tree, tree_transform, collision_filter=1) # avoid self-collisions
-        # scene.add_asset(wall_name, wall, wall_transform)
-        scene.add_asset(block_name, block, block_transform)
+        # scene.add_asset(block_name, block, block_transform, collision_filter=1, collision_group=2)
 
     scene.setup_all_envs(setup)    
 
     
-    no_contact = True
-    force = np_to_vec3([0, 0, 0])
+    #no_contact = True
+    #force = np_to_vec3([0, 0, 0])
 
-    # policy = GraspTreePolicy(franka, franka_name)
-    # policy = RRTTreeFollowingPolicy(franka, franka_name)
-    policy = GraspBlockPolicy(franka, franka_name, block, block_name)
+    policy = RRTTreeFollowingPolicy(franka, franka_name, tree, tree_name, actuator_mode='joints')
+    # change to control policy
 
+    # home_joint = policy._franka.get_joints(0, policy._franka_name)[:-2]
+    # joint_ranges = np.array([
+    #     2.9671*2,
+    #     1.8362*2,
+    #     2.9671*2,
+    #     0.0870+3,
+    #     2.9671*2,
+    #     3+0.0873,
+    #     2.9671*2
+    # ])
+    # rng = np.random.default_rng(42)
+    # offsets_ratio = rng.random([20, 7])*0.3-0.015
+    # offsets = np.multiply(offsets_ratio, joint_ranges)
 
-    while True:
-        # get grabble tree link poses
-        # grabbable_link_indices, grabbable_link_poses = get_grabbable_tree_links()
-        
-        # visualize_box_collision_for_tree()
+    # rrt_success = np.array([
+    #     [-0.2589816,  -0.26682076,  0.69985781, -2.09838354, -0.54362249,   1.5399737, -0.02674972],
+    #     [-0.64133424, -1.11601532, -0.87702325, -2.09047383,  0.29347739,   1.76081849, 1.28516885],
+    #     [-0.0731406,  -0.70966463, -0.641255,   -2.7131782,   0.29980106,  1.54402597, 0.90153542],
+    #     [-0.34544766, -0.6981204,  -0.57542849, -2.02593401,  0.46023198,  1.77406077, 0.66450614],
+    #     [-0.30289128, -1.177033 ,  -0.70604583, -2.27502686, -0.58643016 , 1.96453837, 0.92970809]
+    # ])
+    # intermediate_joints = np.array([
+    #     [0.2435, -0.6, 0.3209, -2.0111, -0.3499, 1.4845, 0.3800, 64, 133],
+    #     [0.1413, -0.7518, -0.3157, -1.9311, -0.0187, 1.4751, 0.9924, 133, 62],
+    #     [-0.3347, -0.8270, -0.3199, -2.1337, 0.0236, 1.4488, 0.9158, 113, 99],
+    #     [-0.0609, -0.7706, -0.3396, -1.9461, 0.1367, 1.5599, 0.8180, 107, 101],
+    #     [-0.0609, -0.7706, -0.3396, -1.9461, 0.1367, 1.5599, 0.8180, 103, 99]
+    # ])
+    # rrt_successes = []
+    # naive_success = np.load('naive_success.npy')
+    # # for i, offset in enumerate(offsets):
+    # # for i in range(len(rrt_success)):
+    # for i, naive_success_ in enumerate(naive_success):
+    for i in range(20):
+        print('-'*50)
+        print(f'exp {i}')
+        # start_joint = home_joint + offset
+        # start_joint = both_fail + offset
+        # start_joint = rrt_success[i]
+        # start_joint = naive_success_[0]
+        # target_joint = np.array([0.32009414, -0.49480677, -0.18753628, -1.894689, -0.09001054, 1.4097925, 0.9255461])
+        # policy._franka.set_joints(0, policy._franka_name, np.concatenate([start_joint, np.ones(2)*0.104]))
+        # policy.actuator_mode = 'attractor'
 
+        # plan_1 = np.linspace(start_joint, intermediate_joints[i, :-2], int(intermediate_joints[i, -2]))
+        # plan_2 = np.linspace(intermediate_joints[i, :-2], target_joint, int(intermediate_joints[i, -1]))
+        # plan = np.concatenate([plan_1, plan_2])
 
-        #randomly choose index to grab
-        # idx = np.random.randint(0, len(grabbable_link_indices))
-        # idx = -1 #hardcode to grab the last link
+        # plan = np.linspace(start_joint, target_joint, 200)
+        # policy._plan = plan
 
-        # goal_grab_pose = grabbable_link_poses[:,idx]
-
-        # goal_grab_pose[0] = goal_grab_pose[0] + 0.2 # arbitrary offset to see if robot will collide
-        # goal_grab_pose[1] = 0# arbitrary offset to see if robot will collide
-
-        # print(f"grabbing link idx {idx}, goal_grab_pose {goal_grab_pose} ")
-        # policy.set_grasp_goal(goal_grab_pose)
-
-        print(f"resetting policy")
         policy.reset()
-        print(f"running policy")
         scene.run(time_horizon=policy.time_horizon, policy=policy)
+        #rt_successes.append(policy.plan)
+        # breakpoint()
+
+    rrt_successes = np.array(rrt_successes)
+    np.save(f'rrt_success0.npy', rrt_successes)
 
     

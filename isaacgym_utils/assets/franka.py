@@ -13,7 +13,6 @@ from .franka_numerical_utils import get_franka_mass_matrix
 
 
 class GymFranka(GymURDFAsset):
-
     INIT_JOINTS = np.array([0, -np.pi / 4, 0, -3 * np.pi / 4, 0, np.pi / 2, np.pi / 4, 0.04, 0.04])
     _LOWER_LIMITS = np.array([-2.8973, -1.7628, -2.8973, -3.0718, -2.8973, -0.0175, -2.8973, 0, 0])
     _UPPER_LIMITS = np.array([2.8973, 1.7628, 2.8973, -0.0698, 2.8973, 3.7525, 2.8973, 0.04, 0.04])
@@ -22,20 +21,19 @@ class GymFranka(GymURDFAsset):
     _URDF_PATH = 'franka_description/robots/franka_panda.urdf'
     _URDF_PATH_WITH_DYNAMICS = 'franka_description/robots/franka_panda_dynamics.urdf'
 
-    # a d alpha theta
-    dh_params = np.array([
-                    [0, 0.333, 0, 0],
-                    [0, 0, -np.pi/2, 0],
-                    [0, 0.316, np.pi/2, 0],
-                    [0.0825, 0, np.pi/2, 0],
-                    [-0.0825, 0.384, -np.pi/2, 0],
-                    [0, 0, np.pi/2, 0],
-                    [0.088, 0, np.pi/2, 0],
-                    [0, 0.107, 0, -0.785398163397],
-                    [0, 0.1034, 0, 0]])
-                    # [0.088, 0, np.pi/2, 0],
-                    # [0, 0.107, 0, 0],
-                    # [0, 0.1034, 0, 0]])
+    dh_params = np.array([[0, 0.333, 0, 0],
+                            [0, 0, -np.pi/2, 0],
+                            [0, 0.316, np.pi/2, 0],
+                            [0.0825, 0, np.pi/2, 0],
+                            [-0.0825, 0.384, -np.pi/2, 0],
+                            [0, 0, np.pi/2, 0],
+                            [0.088, -0.107, np.pi/2, 0],
+                            [0, 0.107, 0, -0.785398163397],
+                            [0, -0.1034, np.pi, 0]])
+                            # [0.088, 0, np.pi/2, 0],
+                            # [0, 0.107, 0, 0],
+                            # [0, 0.1034, 0, 0]])
+    num_dof = 7
 
     _dh_alpha_rot = np.array([
                         [1, 0, 0, 0],
@@ -135,8 +133,7 @@ class GymFranka(GymURDFAsset):
         if actuation_mode == 'attractors':
             self._attractor_stiffness = cfg['attractor_props']['stiffness']
             self._attractor_damping = cfg['attractor_props']['damping']
-        
-    def precompute_self_collision_box_data(self):
+
         self._collision_boxes_data = np.zeros((len(self.collision_box_shapes), 10))
         self._collision_boxes_data[:, -3:] = self.collision_box_shapes
 
@@ -162,6 +159,9 @@ class GymFranka(GymURDFAsset):
         self._collision_proj_axes = np.zeros((3, 15))
         self._box_vertices_offset = np.ones([8, 3])
         self._box_transform = np.eye(4)
+    
+    def set_base_offset(self, offset):
+        self.base_offset = np.array(offset)
 
     def set_gripper_width_target(self, env_idx, name, width):
         joints_targets = self.get_joints_targets(env_idx, name)
@@ -405,23 +405,14 @@ class GymFranka(GymURDFAsset):
         Returns: A numpy array that contains the [x, y, z, roll, pitch, yaw] location of the end-effector.
         '''
         fk = self.forward_kinematics(joints)
-        ee_frame = fk[-2,:,:]
+        ee_frame = fk[-1,:,:]
 
         x, y, z = ee_frame[:-1,3]
         roll = np.arctan2(ee_frame[2,1], ee_frame[2,2])
         pitch = np.arcsin(-ee_frame[2,0])
         yaw = np.arctan2(ee_frame[1,0], ee_frame[0,0])
 
-        # r = R.from_matrix(ee_frame[:3,:3])
-        # r = r.as_euler('xyz')
-
-        # ee = np.array([x, y, z, *r])
         ee = np.array([x, y, z, roll, pitch, yaw])
-
-        # ee = np.zeros(7)
-        # ee[:3] = ee_frame[:-1,3]
-        # ee[-4:] = rot_to_np_quat(ee_frame[:3,:3]) # x y z w
-
         ee[:3] += self.base_offset
 
         return ee
@@ -486,6 +477,7 @@ class GymFranka(GymURDFAsset):
         '''
         joints = current_joints.copy()
         current_ee_pos = self.ee(joints)
+        print(f'starting ee pos: {current_ee_pos}')
 
         # ee_error = desired_ee_pos - current_ee_pos
         ee_error = self.ee_error(desired_ee_pos, current_ee_pos)
@@ -494,19 +486,21 @@ class GymFranka(GymURDFAsset):
 
         for i in range(10000):
             jacob = self.jacobian(joints)
-            # joints += alpha * jacob.T.dot(ee_error.T)
-            joints -= alpha * np.linalg.pinv(jacob).dot(ee_error.T)
+            joints += alpha * jacob.T.dot(ee_error.T)
+            # joints -= alpha * np.linalg.pinv(jacob).dot(ee_error.T)
             
             current_ee_pos = self.ee(joints)
-            # ee_error = desired_ee_pos - current_ee_pos
-            ee_error = self.ee_error(desired_ee_pos, current_ee_pos)
-            if np.linalg.norm(ee_error) < 1e-3:
+            ee_error = desired_ee_pos - current_ee_pos
+            # ee_error = self.ee_error(desired_ee_pos, current_ee_pos)
+            # if i % 1000 == 0:
+            #     print(f'ee_error at {i}: {np.linalg.norm(ee_error)}')
+            if np.linalg.norm(ee_error) < 1e-2:
                 print(f'IK solved, pos: {current_ee_pos}')
                 print(np.linalg.norm(ee_error))
                 return joints
 
         print('cannot solve inverse kinematics for target pose')
-        print(f'current pos: {current_ee_pos}')
+        print(f'final ee pos: {current_ee_pos}')
         print(np.linalg.norm(ee_error))
         return joints
 
@@ -518,8 +512,8 @@ class GymFranka(GymURDFAsset):
         '''
         forward_kinematics = np.zeros((len(self.dh_params), 4, 4))
         previous_transformation = np.eye(4)
-
         for i in range(len(self.dh_params)):
+            
             a, d, alpha, theta = self.dh_params[i]
 
             if i < self.num_dof:
@@ -553,10 +547,9 @@ class GymFranka(GymURDFAsset):
                    box contains the position of the center of the box [x, y, z, r, p, y] and the length, width, and height [l, w, h]
         Returns: A boolean where True means the box is in collision with the arm and false means that there are no collisions.
         '''
-        # box_pos, box_rpy, box_hsizes = box[:3], box[3:6], box[6:]/2
-        # box_q = quaternion.from_euler_angles(box_rpy)
-        box_pos, box_q, box_hsizes = box[:3], box[3:7], box[7:]/2
-        box_axes = quaternion.as_rotation_matrix(np.quaternion(*box_q))
+        box_pos, box_rpy, box_hsizes = box[:3], box[3:6], box[6:]/2
+        box_q = quaternion.from_euler_angles(box_rpy)
+        box_axes = quaternion.as_rotation_matrix(box_q)
 
         self._box_vertices_offset[:,:] = self._vertex_offset_signs * box_hsizes
         box_vertices = (box_axes.dot(self._box_vertices_offset.T) + np.expand_dims(box_pos, 1)).T
@@ -597,7 +590,6 @@ class GymFranka(GymURDFAsset):
 
     def get_collision_boxes_poses(self, joints):
         fk = self.forward_kinematics(joints)
-        # print(fk)
 
         box_poses_world = []
         for i, link in enumerate(self._collision_box_links):
@@ -607,17 +599,3 @@ class GymFranka(GymURDFAsset):
             box_poses_world.append(box_pose_world)
 
         return box_poses_world
-
-        # code for checking if each transform is consistent with isaac's answer 
-        # fr_links_poses = self._franka.get_links_poses(joints_start)
-        # isaac_link_transforms = self._franka.get_rb_transforms(env_idx, self._franka_name)
-        # for i in range(len(fr_links_poses)):
-        #     print(f'joint {i}')
-        #     print('fr')
-        #     print(fr_links_poses[i])
-        #     print('iasac')
-        #     print(isaac_link_transforms[i+1].p)
-        #     print(isaac_link_transforms[i+1].r)
-
-        # joints_target = np.array([0.0, 5e-1, 0.0, -2.3, 0.0, 2.8, 7.8e-1])
-        # joints_target = np.array([0, 3.43e-1, 0, -2.235, 0, 2.567, 7.8e-1])

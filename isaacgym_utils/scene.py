@@ -228,7 +228,7 @@ class GymScene:
     def get_asset(self, name, env_idx=0):
         return self._assets[env_idx][name]
 
-    def add_asset(self, name, asset, poses, collision_filter=0):
+    def add_asset(self, name, asset, poses, collision_filter=0, collision_group=None):
         assert not self._has_ran_setup
 
         env_idx = self._current_mutable_env_idx
@@ -243,7 +243,11 @@ class GymScene:
         else:
             pose = poses
 
-        ah = self.gym.create_actor(env_ptr, asset.GLOBAL_ASSET_CACHE[asset.asset_uid], pose, name, env_idx, collision_filter, self._seg_ids[env_idx])
+        if collision_group is None:
+            ah = self.gym.create_actor(env_ptr, asset.GLOBAL_ASSET_CACHE[asset.asset_uid], pose, name, env_idx, collision_filter, self._seg_ids[env_idx])
+        else:
+            ah = self.gym.create_actor(env_ptr, asset.GLOBAL_ASSET_CACHE[asset.asset_uid], pose, name, collision_group, collision_filter, self._seg_ids[env_idx])
+
         self.ah_map[env_idx][name] = ah
 
         asset.set_shape_props(env_idx, name)
