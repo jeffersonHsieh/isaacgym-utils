@@ -44,7 +44,7 @@ class RRT:
 
         self._q_step_size = 0.01  # Default: 0.01
         self._target_p = 0.3  # Default: 0.3
-        self._max_n_nodes = int(1e4)
+        self._max_n_nodes = int(5000)
 
     def sample_valid_joints(self):
         '''
@@ -148,8 +148,8 @@ class RRT:
 
         s = time()
         for n_nodes_sampled in range(self._max_n_nodes):
-            if n_nodes_sampled > 0 and n_nodes_sampled % 100 == 0:
-                print('RRT: Sampled {} nodes'.format(n_nodes_sampled))
+            # if n_nodes_sampled > 0 and n_nodes_sampled % 100 == 0:
+                # print('RRT: Sampled {} nodes'.format(n_nodes_sampled))
 
             reached_target, node_id_new = self.extend(tree, q_target, constraint)
 

@@ -103,11 +103,15 @@ class MoveBlockPolicy(Policy):
         self._ee_waypoint_policies[env_idx](scene, env_idx, t_step, t_sim)
 
 class RRTTreeFollowingPolicy(Policy):
-    def __init__(self, franka, franka_name, *args, **kwargs):
+    def __init__(self, franka, franka_name, tree, tree_name, actuator_mode = 'joints', *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._franka = franka
         self._franka_name = franka_name
+        self.actuator_mode = actuator_mode
+        self._tree = tree
+        self._tree_name = tree_name
         self._time_horizon = 1000
+        self._plan = None
 
         self.reset()
 
@@ -126,16 +130,31 @@ class RRTTreeFollowingPolicy(Policy):
         ee_transform = self._franka.get_ee_transform(env_idx, self._franka_name)
 
         if t_step == 0:
-            self.boxes.append(np.array([0.001, 0.001, 0.001, 1, 0, 0, 0, 0, 0, 0]))
-            # self.boxes = np.concatenate((wall_pos, wall_size), axis=1)
-            rrt = RRT(self._franka, self.is_in_collision)
-            self._init_ee_transforms.append(ee_transform)
+            if self._plan is not None:
+                self.plan = self._plan
+            else:
+                joints_start = self._franka.get_joints(env_idx, self._franka_name)[:-2]
+                rrt = RRT(self._franka, self.is_in_collision)
 
-            joints_start = self._franka.get_joints(env_idx, self._franka_name)[:-2]
-            joints_target = np.array([ 0.08159304, -0.7904955,  -0.16469808, -1.7779573,   0.6305357,   1.7729826, 0.861042  ])
+                # self.boxes.append(np.array([0, 0, 0, 0, 0, 0, 0.5, 0.5, 2]))
 
-            self.plan = rrt.plan(joints_start, joints_target)
-            np.save(f'tree_plan.npy', self.plan)
+                # print(f'issac starting pos: {ee_transform.p}, {ee_transform.r.x}')
+
+                # get ee [-1.93109447e-01 -8.18154653e-17  5.93882073e-01 -2.09060298e-16  -4.37113853e-08 -1.11022310e-16]
+
+                target_idx = 2
+
+                targets = self._tree.get_tips_transforms(env_idx, self._tree_name)
+                target_pos = vec3_to_np(targets[target_idx].p)
+                target_pos_rpy = np.concatenate((target_pos + [0, 0, 0.12], np.array([0, 0, 0])))
+                # print(f'target pos: {target_pos_rpy}')
+
+                # joints_target = np.array([ 0.08159304, -0.7904955,  -0.16469808, -1.7779573,   0.6305357,   1.7729826, 0.861042  ])
+                joints_target = self._franka.inverse_kinematics(target_pos_rpy, joints_start)
+                print(f'joint target: {joints_target}')
+
+                self.plan = rrt.plan(joints_start, joints_target)
+                # np.save(f'tree_plan.npy', self.plan)
 
             self.i = 0
             self._ee_waypoint_policies.append(
@@ -143,6 +162,10 @@ class RRTTreeFollowingPolicy(Policy):
             )
 
         if t_step > 15 and t_step % 2 == 0:
+            # print(self.actuator_mode)
+            # if self.actuator_mode is not 'joints':
+            #     self._ee_waypoint_policies[env_idx] = EEImpedanceWaypointPolicy(self._franka, self._franka_name, ee_transform, ee_transform, T=15)
+            # else:
             try:
                 self._ee_waypoint_policies[env_idx] = SetJointPolicy(self._franka, self._franka_name, np.concatenate([self.plan[self.i], np.ones(2)*0.104]), T=15)
                 self.i += 1
@@ -273,44 +296,46 @@ class GraspBlockPolicy(Policy):
             self._ee_waypoint_policies.append(
                 EEImpedanceWaypointPolicy(self._franka, self._franka_name, ee_transform, ee_transform, T=20)
             )
-
-        if t_step == 20:
-            block_transform = self._block.get_rb_transforms(env_idx, self._block_name)[0]
-            # print(self._init_ee_transforms[env_idx].r)
-            grasp_transform = gymapi.Transform(p=block_transform.p, r=gymapi.Quat(0.707, 0, 0, 0.707))
-            pre_grasp_transfrom = gymapi.Transform(p=grasp_transform.p + gymapi.Vec3(0, 0.1, 0), r=grasp_transform.r)
-
-            self._grasp_transforms.append(grasp_transform)
-            self._pre_grasp_transforms.append(pre_grasp_transfrom)
-
-            self._ee_waypoint_policies[env_idx] = \
-                EEImpedanceWaypointPolicy(
-                    self._franka, self._franka_name, ee_transform, self._pre_grasp_transforms[env_idx], T=180
-                )
-
-        if t_step == 200:
-            self._ee_waypoint_policies[env_idx] = \
-                EEImpedanceWaypointPolicy(
-                    self._franka, self._franka_name, self._pre_grasp_transforms[env_idx], self._grasp_transforms[env_idx], T=100
-                )
-
-        if t_step == 300:
-            self._franka.close_grippers(env_idx, self._franka_name)
+        # self._ee_waypoint_policies[env_idx] = EEImpedanceWaypointPolicy(self._franka, self._franka_name, ee_transform, ee_transform, T=20)
         
-        if t_step == 400:
-            self._ee_waypoint_policies[env_idx] = \
-                EEImpedanceWaypointPolicy(
-                    self._franka, self._franka_name, self._grasp_transforms[env_idx], self._pre_grasp_transforms[env_idx], T=100
-                )
 
-        if t_step == 500:
-            self._ee_waypoint_policies[env_idx] = \
-                EEImpedanceWaypointPolicy(
-                    self._franka, self._franka_name, self._pre_grasp_transforms[env_idx], self._grasp_transforms[env_idx], T=100
-                )
+        # if t_step == 20:
+        #     block_transform = self._block.get_rb_transforms(env_idx, self._block_name)[0]
+        #     # print(self._init_ee_transforms[env_idx].r)
+        #     grasp_transform = gymapi.Transform(p=block_transform.p, r=gymapi.Quat(0.707, 0, 0, 0.707))
+        #     pre_grasp_transfrom = gymapi.Transform(p=grasp_transform.p + gymapi.Vec3(0, 0.1, 0), r=grasp_transform.r)
 
-        if t_step == 600:
-            self._franka.open_grippers(env_idx, self._franka_name)
+        #     self._grasp_transforms.append(grasp_transform)
+        #     self._pre_grasp_transforms.append(pre_grasp_transfrom)
+
+        #     self._ee_waypoint_policies[env_idx] = \
+        #         EEImpedanceWaypointPolicy(
+        #             self._franka, self._franka_name, ee_transform, self._pre_grasp_transforms[env_idx], T=180
+        #         )
+
+        # if t_step == 200:
+        #     self._ee_waypoint_policies[env_idx] = \
+        #         EEImpedanceWaypointPolicy(
+        #             self._franka, self._franka_name, self._pre_grasp_transforms[env_idx], self._grasp_transforms[env_idx], T=100
+        #         )
+
+        # if t_step == 300:
+        #     self._franka.close_grippers(env_idx, self._franka_name)
+        
+        # if t_step == 400:
+        #     self._ee_waypoint_policies[env_idx] = \
+        #         EEImpedanceWaypointPolicy(
+        #             self._franka, self._franka_name, self._grasp_transforms[env_idx], self._pre_grasp_transforms[env_idx], T=100
+        #         )
+
+        # if t_step == 500:
+        #     self._ee_waypoint_policies[env_idx] = \
+        #         EEImpedanceWaypointPolicy(
+        #             self._franka, self._franka_name, self._pre_grasp_transforms[env_idx], self._grasp_transforms[env_idx], T=100
+        #         )
+
+        # if t_step == 600:
+        #     self._franka.open_grippers(env_idx, self._franka_name)
 
         # if t_step == 700:
         #     self._ee_waypoint_policies[env_idx] = \
@@ -325,12 +350,6 @@ class GraspBlockPolicy(Policy):
         #         )
 
         self._ee_waypoint_policies[env_idx](scene, env_idx, t_step, t_sim)
-        print(f'current joint angle: {self._franka.get_joints(env_idx, self._franka_name)[:-2]}')
-        # 0, 3.43e-1, 0, -2.235, 0, 2.567, 7.8e-1
-        # print(f'current p: {ee_transform.p}')
-        # 0.5 0 0.5
-        # print(f'current q: {ee_transform.r}')
-        # 0.5 0 0.5
 
 
 class GraspPointPolicy(Policy):

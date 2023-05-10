@@ -89,6 +89,18 @@ class GymTree(GymURDFAsset):
             self._attractor_stiffness = cfg['attractor_props']['stiffness']
             self._attractor_damping = cfg['attractor_props']['damping']
 
+    def get_tips_transforms(self, env_idx, name):
+        return [
+            self.get_rb_transform(env_idx, name, f'link{i}_tip')
+            for i in [5, 7, 8, 9, 10]
+        ]
+
+    def get_tips_rigid_transforms(self, env_idx, name):
+        transforms = self.get_tips_transforms(env_idx, name)
+        return [transform_to_RigidTransform(transform,
+                                        from_frame=f'link{i}_tip'.format(i+1),
+                                        to_frame='world')
+                for i, transform in zip([5, 7, 8, 9, 10], transforms)]
 
     def get_link_transform(self, env_idx, name, link_name):
         transform = self.get_rb_transform(env_idx, name, link_name) 
