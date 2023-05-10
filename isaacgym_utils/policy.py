@@ -568,7 +568,8 @@ class FrankaJointWayPointPolicy(Policy):
         ndof = self._franka.num_dof
         target_joint_pos = self._traj[min(t_step, self._T - 1)]
         tau = self._joint_ctrlr.compute_tau(env_idx, target_joint_pos,scene.dt)
-        tau = np.clip(tau,self._franka.joint_limits_lower[:ndof],self._franka.joint_limits_upper[:ndof])
+        # joint limits != torque limits!
+        # tau = np.clip(tau,self._franka.joint_limits_lower[:ndof],self._franka.joint_limits_upper[:ndof])
         self._franka.apply_torque(env_idx, self._franka_name, tau)
         self.actual_traj.append(self._franka.get_joints(env_idx, self._franka_name)[:ndof])
 

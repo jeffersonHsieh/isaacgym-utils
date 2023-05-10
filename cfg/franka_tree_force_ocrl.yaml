@@ -186,3 +186,7 @@ block:
     color: [0.2, 0.7, 0.2]
   asset_options:
     density: 1000
+
+camera:
+  width: 320
+  height: 240

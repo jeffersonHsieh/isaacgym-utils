@@ -3,11 +3,11 @@
 conda activate rlgpu
 mkdir -p exp
 
-LOG="exp/pick_block_log.txt"
+LOG="exp/tree1_log.txt"
 
-for kp in 5 7 10
+for kp in 100 500 700 1000 2000
 do 
-for kd in 0.7 0.8
+for kd in 0.1 10 30 50 100
 do
     python franka_tree_control_exp.py --kp $kp --kd $kd --log_file $LOG
 

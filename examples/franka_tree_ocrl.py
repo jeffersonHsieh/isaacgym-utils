@@ -70,8 +70,8 @@ def get_grabbable_tree_links():
 # ====================================================================================================
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument('--cfg', '-c', type=str, default='../cfg/franka_tree.yaml')
-    # parser.add_argument('--cfg', '-c', type=str, default='../cfg/franka_tree_force_ocrl.yaml')
+    # parser.add_argument('--cfg', '-c', type=str, default='../cfg/franka_tree.yaml')
+    parser.add_argument('--cfg', '-c', type=str, default='../cfg/franka_tree_force_ocrl.yaml')
 
     args = parser.parse_args()
     cfg = YamlConfig(args.cfg)
