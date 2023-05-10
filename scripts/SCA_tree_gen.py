@@ -4,6 +4,7 @@ import numpy as np
 import numpy.linalg
 from xml.dom import minidom
 import os
+from pathlib import Path
 from scipy.spatial.transform import Rotation
 
 import yaml
@@ -203,6 +204,7 @@ class TreeGenerator(object):
         :return: list of tree points.
         """
         i = 0
+        print(len(self.tree_points))
         print(self.max_tree_points)
         while len(self.att_pts) >= 1 and i < self.max_steps and len(self.tree_points) < self.max_tree_points:
             sv_sets = self.generate_sv_sets() # generate the attraction point sets, that are in play this round
@@ -210,7 +212,7 @@ class TreeGenerator(object):
             point_index = len(self.tree_points) # point index is assigned as highest index so far +1
             for key in sv_sets.keys():
                 new_tps.append(self.generate_new_point(key, sv_sets[key])) # generate new tree point. self.edges and self.tree_points is updated in this function
-                if len(self.tree_points) >= self.max_tree_points: # stop immediately after the max number of tree points was reaches
+                if len(self.tree_points) > self.max_tree_points: # stop immediately after the max number of tree points was reaches
                     break
             self.update_closest_tp_list(new_tps, point_index) # update the closest tp list
             self.step_width = self.step_width * self.step_width_scaling # reduce step width
@@ -319,15 +321,33 @@ class TreeGenerator(object):
         urdf.appendChild(robot)
         self.generate_color_definitions(urdf, robot)
         self.generate_ground(urdf, robot)
+
+        total_box_link_list = []
+
         for node_index, _ in enumerate(self.tree_points):
             children = self.find_children(node_index)
             self.generate_spherical_joint(urdf, robot, node_index, children)
             for child in children:
                 self.generate_link(urdf, robot, node_index, child)
+                box_link = self.generate_box_collision(urdf, robot, node_index, child)
+
+                #append box link to total box link list
+                total_box_link_list.append(box_link)
+
+
+        #convert link as np array
+        total_box_link_np = np.array(total_box_link_list)
+        #reshape np array with dim (n x 9)
+        total_box_link_np = total_box_link_np.reshape(-1,9)
+        #save np array
+        save_path = Path(self.path)
+        np.save(str(save_path/f"tree{self.tree_id}_box_link.npy"), total_box_link_np)
+        print(f" saving box link to {save_path}/tree{self.tree_id}_box_link.npy")
+
 
         self.clean_edge_list()
         tree_string = urdf.toprettyxml(indent='\t')
-        save_path_file = "%s[%s]tree%s.urdf" % (self.path, self.max_tree_points, self.tree_id)
+        save_path_file = str(save_path/f"[{self.max_tree_points}]tree{self.tree_id}.urdf")
 
         with open(save_path_file, "w") as f:
             f.write(tree_string)
@@ -618,6 +638,32 @@ class TreeGenerator(object):
             self.add_limits(urdf, jointz)
             robot.appendChild(jointz)
 
+    def generate_box_collision(self, urdf, robot, parent, child):
+        """
+        box collision generation: generates a box collision between parent and child
+        return X,Y,Z,  Rx, Ry, Rz, L, W, H, 
+        """
+        xyz_offset = (self.tree_points[child] - self.tree_points[parent])
+        link_length = np.linalg.norm(xyz_offset)
+        xyz_offset = xyz_offset/2
+        rpy_rotations = self.calculate_rpy(parent, child)
+        cylinder_radius = self.tip_radius
+        idx = 0
+        while idx < len(self.edges[parent]):
+            cylinder_radius = self.branch_thickness_dict[child]
+            idx += 1
+
+        #change cylinder radius to box L x W
+        box_length = cylinder_radius * 2
+        box_width = cylinder_radius * 2
+        box_height = link_length
+
+        #return collision box dimensions as list
+        print(f" xyz_offset: {xyz_offset} rpy_rotations: {rpy_rotations} box_length: {box_length} box_width: {box_width} box_height: {box_height}")
+        return [xyz_offset[0], xyz_offset[1], xyz_offset[2], rpy_rotations[0], rpy_rotations[1], rpy_rotations[2], box_length, box_width, box_height]
+
+        
+
     def generate_link(self, urdf, robot, parent, child):
         """
         urdf generation: generates a link between parent and child
@@ -709,10 +755,11 @@ class TreeGenerator(object):
         Z_tmp = self.tree_points[child] - self.tree_points[parent]
         Z = Z_tmp/np.linalg.norm(Z_tmp)
 
-        if Z[2] == 1 and Z[1] == 0 and Z[0] == 0:
+        if Z[2] == 1 and Z[1] == 0 and Z[0] == 0: # if Z==[0,0,1]
             X = np.array([1,0,0])
         else:
-            X_tmp = np.cross(Z, np.array([0,0,1]))
+            # if Z is not parallel to [0,0,1], use x-prod to find the axis orthogonal to this plane
+            X_tmp = np.cross(Z, np.array([0,0,1])) 
             X = X_tmp/np.linalg.norm(X_tmp)
 
         Y_tmp = np.cross(Z, X)
@@ -723,7 +770,7 @@ class TreeGenerator(object):
 
         rot = Rotation.from_matrix(R)
         rot_eul = rot.as_euler("xyz")
-
+        import pdb;pdb.set_trace()
         r = rot_eul[0]
         p = rot_eul[1]
         y = rot_eul[2]
@@ -859,7 +906,8 @@ class TreeGenerator(object):
         file_object["tree"]["dof_props"]["damping"] = damping_list # -len(self.tree_points)
         file_object["tree"]["dof_props"]["effort"] = [87] * (len(self.name_dict["joints"])) # -len(self.tree_points)
 
-        location = "%s[%s]tree%s.yaml" % (self.path, self.max_tree_points, self.tree_id)
+        save_path = Path(self.path)
+        location = str(save_path/f"[{self.max_tree_points}]tree{self.tree_id}.yaml")
         with open(location, "w") as f:
             yaml.dump(file_object, f)
 
