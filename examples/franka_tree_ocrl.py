@@ -283,8 +283,8 @@ def get_grabbable_tree_links():
 # ====================================================================================================
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    # parser.add_argument('--cfg', '-c', type=str, default='cfg/franka_tree.yaml')
-    parser.add_argument('--cfg', '-c', type=str, default='/home/jan-malte/OCRL_project/isaacgym-utils/cfg/franka_tree_force_ocrl.yaml')
+    parser.add_argument('--cfg', '-c', type=str, default='../cfg/franka_tree.yaml')
+    # parser.add_argument('--cfg', '-c', type=str, default='../cfg/franka_tree_force_ocrl.yaml')
 
     args = parser.parse_args()
     cfg = YamlConfig(args.cfg)
@@ -296,18 +296,18 @@ if __name__ == "__main__":
     franka = GymFranka(cfg['franka'], scene, actuation_mode='torques')
     tree = GymTree(cfg['tree'], scene, actuation_mode='joints')
 
-    wall = GymBoxAsset(scene, **cfg['wall']['dims'], 
-                        shape_props=cfg['wall']['shape_props'],
-                        rb_props=cfg['wall']['rb_props'],
-                        asset_options=cfg['wall']['asset_options']
-                        )
+    # wall = GymBoxAsset(scene, **cfg['wall']['dims'], 
+    #                     shape_props=cfg['wall']['shape_props'],
+    #                     rb_props=cfg['wall']['rb_props'],
+    #                     asset_options=cfg['wall']['asset_options']
+    #                     )
     block = GymBoxAsset(scene, **cfg['block']['dims'], 
                         shape_props=cfg['block']['shape_props'], 
                         rb_props=cfg['block']['rb_props'],
                         asset_options=cfg['block']['asset_options']
                         )
 
-    wall_transform = gymapi.Transform(p=gymapi.Vec3(-0.1, 0.1, 0.1))
+    # wall_transform = gymapi.Transform(p=gymapi.Vec3(-0.1, 0.1, 0.1))
     franka_transform = gymapi.Transform(p=gymapi.Vec3(-0.5, 0, 0))
     tree_transform = gymapi.Transform(p=gymapi.Vec3(0, 0, 0))
     block_transform = gymapi.Transform(p=gymapi.Vec3(0.3, 0, 0.5))
@@ -345,8 +345,8 @@ if __name__ == "__main__":
     force = np_to_vec3([0, 0, 0])
 
     # policy = GraspTreePolicy(franka, franka_name)
-    # policy = RRTTreeFollowingPolicy(franka, franka_name)
-    policy = GraspBlockPolicy(franka, franka_name, block, block_name)
+    policy = RRTTreeFollowingPolicy(franka, franka_name)
+    # policy = GraspBlockPolicy(franka, franka_name, block, block_name)
 
 
     while True:

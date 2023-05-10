@@ -1,6 +1,7 @@
 import argparse
 
 import numpy as np
+from pathlib import Path
 from autolab_core import YamlConfig, RigidTransform
 
 from isaacgym import gymapi
@@ -16,7 +17,9 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('--cfg', '-c', type=str, default='../cfg/franka_pick_block.yaml')
     parser.add_argument('--kp',default=10,type=float)
-    parser.add_argument('--kd',default=3,type=float)
+    parser.add_argument('--kd',default=1,type=float)
+    parser.add_argument('--log_file',default=None,type=Path)
+    parser.add_argument('--traj',default="plan-correct.npy",type=Path)
     args = parser.parse_args()
     cfg = YamlConfig(args.cfg)
 
@@ -86,10 +89,11 @@ if __name__ == "__main__":
     # policy = GraspBlockPolicy(franka, franka_name, block, block_name)
     # policy = RRTGraspBlockPolicy(franka, franka_name, block, block_name, wall, wall_name)
     P_GAIN = np.diag([args.kp]*7)
+    # P_GAIN = np.diag([0.3,0.3,0.3,1,1,1,1])
     D_GAIN = np.diag([args.kd]*7)
-    traj = np.load('plan-correct.npy')
+    traj = np.load(str(args.traj))
     policy = FrankaJointWayPointPolicy(franka,franka_name,init_joint_pos=traj[0],goal_joint_pos = traj[-1],
-                                       traj=traj,P_gain=P_GAIN,D_gain=D_GAIN,T=len(traj))
+                                       traj=traj,P_gain=P_GAIN,D_gain=D_GAIN,T=max(len(traj),1))
     # policy = RRTFollowingPolicy(franka,franka_name,traj=traj)
     
     # import pdb;pdb.set_trace()
@@ -108,7 +112,7 @@ if __name__ == "__main__":
         print(f"resetting policy")
         policy.reset()
         print(f"running scene again")
-        scene.run(time_horizon=policy.time_horizon, policy=policy, custom_draws=custom_draws)
+        scene.run(time_horizon=1000, policy=policy, custom_draws=custom_draws)
     print("Goal joint state (degs)", np.degrees(traj[-1]))
     print("Goal ee pos", franka.ee(traj[-1]))
     print("Actual joint states (degs)",np.degrees(policy.actual_traj[-1]))
@@ -117,5 +121,9 @@ if __name__ == "__main__":
     print("ee error (2-norm)", ee_error)
     print("joint error (inf norm degree)", np.linalg.norm(policy.actual_traj[-1] - traj[-1],np.inf))
     print("joint error (-inf norm degree)", np.linalg.norm(policy.actual_traj[-1] - traj[-1],-np.inf))
+
+    if args.log_file!=None:
+        with args.log_file.open("a+") as f:
+            f.write(f"{traj.name},{args.kp},{args.kd},{ee_error}\n")
     
-    # assert np.linalg.norm(franka.ee(policy.actual_traj[-1])[:3] - franka.ee(traj[-1])[:3]) < 0.01
+    assert np.linalg.norm(franka.ee(policy.actual_traj[-1])[:3] - franka.ee(traj[-1])[:3]) < 0.01

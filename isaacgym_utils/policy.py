@@ -507,6 +507,7 @@ class FrankaJointController:
         if self._prev_delta is None:
             self._prev_delta = delta_joints
         error_rate = (delta_joints - self._prev_delta) / dt
+        # error_rate = (delta_joints) / dt
         self._prev_delta = delta_joints
         # print(delta_joints)
         # self._franka.apply_delta_joint_targets(env_idx, self._name, delta_joints)
@@ -535,6 +536,7 @@ class FrankaJointWayPointPolicy(Policy):
             self._traj = traj
             assert len(traj) == T and len(traj[0]) == 7 \
                 and (traj[0] == init_joint_pos).all() and (traj[-1] == goal_joint_pos).all()
+        self.actual_traj = []
 
     @property
     def horizon(self):
@@ -544,9 +546,12 @@ class FrankaJointWayPointPolicy(Policy):
         return self._time_horizon
 
     def __call__(self, scene, env_idx, t_step, t_sim):
+        ndof = self._franka.num_dof
         target_joint_pos = self._traj[min(t_step, self._T - 1)]
         tau = self._joint_ctrlr.compute_tau(env_idx, target_joint_pos,scene.dt)
+        tau = np.clip(tau,self._franka.joint_limits_lower[:ndof],self._franka.joint_limits_upper[:ndof])
         self._franka.apply_torque(env_idx, self._franka_name, tau)
+        self.actual_traj.append(self._franka.get_joints(env_idx, self._franka_name)[:ndof])
 
 
 class RRTFollowingPolicy(Policy):
