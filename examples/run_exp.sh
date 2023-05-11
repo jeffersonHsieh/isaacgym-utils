@@ -3,7 +3,7 @@
 conda activate rlgpu
 mkdir -p exp
 
-LOG="exp/tree1_log.txt"
+LOG="../exp/res/tree1_log.txt"
 
 for kp in 100 500 700 1000 2000
 do 
