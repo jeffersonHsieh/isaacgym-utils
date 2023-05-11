@@ -8,7 +8,7 @@ Chia-Chun Hsieh, Yi-Hung Chiu, Mark Lee
 This repo extends [CMU IAMLAB's isaacgym-utils](https://github.com/iamlab-cmu/isaacgym-utils) for our project. Here are our modifications:
 
 1. Tree Generation: Please refer to [TREEGEN.md](TREEGEN.md) for details on how to run
-    * [scripts/generate_tree_files.py] (scripts/generate_tree_files.py) to generate the collision boxes `npy` and tree `urdf` representation used by the planning algorithm and simulation respectively
+    * [scripts/generate_tree_files.py](scripts/generate_tree_files.py) to generate the collision boxes `npy` and tree `urdf` representation used by the planning algorithm and simulation respectively
     * [scripts/SCA_tree_gen.py](scripts/SCA_tree_gen.py) generates tree and collision box constraints for RRT. See [this method](https://github.com/jeffersonHsieh/isaacgym-utils/blob/372acfbeea82ddc4f7b7c5611a40f682695c6ef0/scripts/SCA_tree_gen.py#L311) for details
     * [examples/franka_tree_visualize_ocrl.py](examples/franka_tree_visualize_ocrl.py) to render tree in simulation and render npy representations in matplotlib
     * `cfg/franka_tree_force_ocrl.yaml`: generated tree config
