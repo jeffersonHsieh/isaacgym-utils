@@ -1,0 +1,192 @@
+scene:
+  n_envs: 1
+  es: 1
+  gui: 1
+  cam:
+    cam_pos: [5, 0, 5]
+    look_at: [0, 0, 0]
+  gym:
+    dt: 0.01
+    substeps: 2
+    up_axis: z
+    type: physx
+    use_gpu_pipeline: False
+    physx:
+      solver_type: 1
+      num_position_iterations: 8
+      num_velocity_iterations: 1
+      rest_offset: 0.0
+      contact_offset: 0.001
+      friction_offset_threshold: 0.001
+      friction_correlation_distance: 0.0005
+      use_gpu: True
+    device:
+      compute: 0
+      graphics: 0
+    plane:
+      dynamic_friction: 0.4
+      static_friction: 0
+      restitution: 0
+
+
+franka:
+  asset_options:
+    fix_base_link: True
+    flip_visual_attachments: True
+    armature: 0.01
+    max_linear_velocity: 100.0
+    max_angular_velocity: 40.0
+    disable_gravity: True
+  attractor_props:
+    stiffness: 1e3
+    damping: 2.5e2
+  shape_props:
+    thickness: 1e-3
+  dof_props:
+    stiffness: [0, 0, 0, 0, 0, 0, 0, 0, 0]
+    damping: [2e2, 2e2, 2e2, 2e2, 2e2, 2e2, 2e2, 5, 5]
+    effort: [87, 87, 87, 87, 12, 12, 12, 100, 100]
+
+wall:
+  dims:
+    sx: 0.03
+    sy: 0.3
+    sz: 0.6
+  shape_props:
+    friction: 0.2
+    rolling_friction: 0.01
+    torsion_friction: 0.01
+    thickness: 2e-3
+  rb_props:
+    flags: none # can be none, no_sim, no_gravity
+    color: [0.7, 0.2, 0.2]
+  asset_options:
+    density: 1000
+
+tree:
+  asset_options:
+    armature: 0.01
+    disable_gravity: true
+    fix_base_link: true
+    flip_visual_attachments: true
+    max_angular_velocity: 40.0
+    max_linear_velocity: 100.0
+  attractor_props:
+    damping: 0
+    stiffness: 0
+  dof_props:
+    damping:
+    - 25
+    - 25
+    - 25
+    - 25
+    - 25
+    - 25
+    - 25
+    - 25
+    - 25
+    - 25
+    - 25
+    - 25
+    - 25
+    - 25
+    - 25
+    - 25
+    - 25
+    - 25
+    - 25
+    - 25
+    - 25
+    - 25
+    - 25
+    - 25
+    - 25
+    - 25
+    - 25
+    - 25
+    - 25
+    - 25
+    effort:
+    - 87
+    - 87
+    - 87
+    - 87
+    - 87
+    - 87
+    - 87
+    - 87
+    - 87
+    - 87
+    - 87
+    - 87
+    - 87
+    - 87
+    - 87
+    - 87
+    - 87
+    - 87
+    - 87
+    - 87
+    - 87
+    - 87
+    - 87
+    - 87
+    - 87
+    - 87
+    - 87
+    - 87
+    - 87
+    - 87
+    stiffness:
+    - 245.1194257324777
+    - 122.55971286623885
+    - 122.55971286623885
+    - 48.637854283196994
+    - 48.637854283196994
+    - 48.637854283196994
+    - 19.30194526365572
+    - 19.30194526365572
+    - 19.30194526365572
+    - 19.301945263655693
+    - 19.301945263655693
+    - 19.301945263655693
+    - 19.30194526365572
+    - 19.30194526365572
+    - 19.30194526365572
+    - 19.301945263655693
+    - 19.301945263655693
+    - 19.301945263655693
+    - 19.301945263655707
+    - 19.301945263655707
+    - 19.301945263655707
+    - 19.301945263655707
+    - 19.301945263655707
+    - 19.301945263655707
+    - 19.301945263655693
+    - 19.301945263655693
+    - 19.301945263655693
+    - 19.301945263655693
+    - 19.301945263655693
+    - 19.301945263655693
+  shape_props:
+    thickness: 0.001
+
+block:
+  dims:
+    sx: 0.05
+    sy: 0.05
+    sz: 2
+  shape_props:
+    friction: 0.4
+    rolling_friction: 0.4
+    torsion_friction: 0.4
+    thickness: 2e-3
+  rb_props:
+    flags: no_sim # can be none, no_sim, no_gravity
+    color: [0.2, 0.7, 0.2]
+  asset_options:
+    density: 1000
+
+camera:
+  width: 320
+  height: 240

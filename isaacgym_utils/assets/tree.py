@@ -13,13 +13,14 @@ class GymTree(GymURDFAsset):
 
     global num_joints, joint_names, num_links, link_names
 
-    joint_names = ['link1_jointx', 'link1_jointy', 'link1_jointz', 'link2_jointx', 'link2_jointy', 'link2_jointz', 'link3_jointx', 'link3_jointy', 'link3_jointz' ,
-        'link4_jointx', 'link4_jointy', 'link4_jointz', 'link5_jointz','link6_jointz',
-        'link7_jointx', 'link7_jointy', 'link7_jointz',  'link8_jointz', 
-        'link9_jointx', 'link9_jointy', 'link9_jointz',  'link10_jointz', 
-        'link11_jointx', 'link11_jointy', 'link11_jointz',  'link12_jointz'  ]
-    link_names = ['link1', 'link2', 'link3', 'link4', 'link5', 'link6', 'link7', 'link7_leaf', 'link8', 'link8_leaf', 'link9', 'link9_leaf', 'link10', 'link10_leaf',
-     'link11', 'link11_leaf', 'link12', 'link12_leaf' ]
+    joint_names = ['joint0_x_to_1', 'joint0_y_to_1', 'joint0_z_to_1', 'joint1_x_to_2', 'joint1_y_to_2', 'joint1_z_to_2', 'joint1_x_to_4', 
+    'joint1_y_to_4', 'joint1_z_to_4', 'joint1_x_to_8', 'joint1_y_to_8', 'joint1_z_to_8', 'joint2_x_to_3', 'joint2_y_to_3', 'joint2_z_to_3', 
+    'joint2_x_to_6', 'joint2_y_to_6', 'joint2_z_to_6', 'joint3_x_to_5', 'joint3_y_to_5', 'joint3_z_to_5', 'joint3_x_to_9', 'joint3_y_to_9', 
+    'joint3_z_to_9', 'joint4_x_to_7', 'joint4_y_to_7', 'joint4_z_to_7', 'joint6_x_to_10', 'joint6_y_to_10', 'joint6_z_to_10']
+
+    link_names = ['base_link', 'link_0_to_1', 'link_1_to_2', 'link_1_to_4', 
+    'link_1_to_8', 'link_2_to_3', 'link_2_to_6', 'link_3_to_5', 'link_3_to_9', 'link_4_to_7', 
+    'link5_tip', 'link_6_to_10', 'link7_tip', 'link8_tip', 'link9_tip', 'link10_tip']
     num_joints = len(joint_names)
     num_links = len(link_names)
     min_angle = -np.pi/16
@@ -33,7 +34,7 @@ class GymTree(GymURDFAsset):
     _VEL_LIMITS = None
 
     # _URDF_PATH = '/home/marklee/github/build_sdf/generated_urdf/tree_pruned.urdf'
-    _URDF_PATH = 'franka_description/robots/tree_full.urdf'
+    _URDF_PATH = 'franka_description/robots/[10]tree0_ocrl.urdf'
     # _URDF_PATH = 'franka_description/robots/tree_test.urdf'
 
     @staticmethod
@@ -55,7 +56,7 @@ class GymTree(GymURDFAsset):
                         assets_root=assets_root
                         )
 
-        print(f"init tree func {(cfg['dof_props'])} ")   
+        # print(f"init tree func {(cfg['dof_props'])} ")   
 
 
         self._use_custom_ee = False
@@ -88,6 +89,18 @@ class GymTree(GymURDFAsset):
             self._attractor_stiffness = cfg['attractor_props']['stiffness']
             self._attractor_damping = cfg['attractor_props']['damping']
 
+    def get_tips_transforms(self, env_idx, name):
+        return [
+            self.get_rb_transform(env_idx, name, f'link{i}_tip')
+            for i in [5, 7, 8, 9, 10]
+        ]
+
+    def get_tips_rigid_transforms(self, env_idx, name):
+        transforms = self.get_tips_transforms(env_idx, name)
+        return [transform_to_RigidTransform(transform,
+                                        from_frame=f'link{i}_tip'.format(i+1),
+                                        to_frame='world')
+                for i, transform in zip([5, 7, 8, 9, 10], transforms)]
 
     def get_link_transform(self, env_idx, name, link_name):
         transform = self.get_rb_transform(env_idx, name, link_name) 
@@ -246,7 +259,7 @@ class GymTree(GymURDFAsset):
             self._UPPER_LIMITS = dof_props['upper']
             self._VEL_LIMITS = dof_props['velocity']
 
-        print(f" ----------- inside post create actor --------- ")
+        # print(f" ----------- inside post create actor --------- ")
 
         self.set_actuation_mode(self._actuation_mode, env_idx, name)
 

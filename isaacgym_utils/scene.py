@@ -1,7 +1,7 @@
 from copy import deepcopy
 import numpy as np
 from numba import jit
-from isaacgym import gymapi, gymtorch
+from isaacgym import gymapi#, gymtorch
 import torch
 
 from .math_utils import np_to_vec3
@@ -14,6 +14,9 @@ class GymScene:
     def __init__(self, cfg):
         self._gym, self._sim, self._physics_engine = make_gym(cfg['gym'])
         self._use_gpu_pipeline = self._gym.get_sim_params(self._sim).use_gpu_pipeline
+################################################ TEMP!!!!
+        self._use_gpu_pipeline = False
+################################################
         self._n_envs = cfg['n_envs']
         self._gui = cfg['gui']
         self._dt = cfg['gym']['dt']
@@ -78,26 +81,29 @@ class GymScene:
             setup(self, self._current_mutable_env_idx)
 
             self._current_mutable_env_idx += 1
-            
+
         if self.use_gpu_pipeline:
             n_rbs_sim = self.gym.get_sim_rigid_body_count(self.sim)
             assert n_rbs_sim % self.n_envs == 0
             n_rbs_env = n_rbs_sim // self.n_envs
             n_dofs_sim = self.gym.get_sim_dof_count(self.sim)
 
-            self.gym.prepare_sim(self.sim)
+            self.gym.prepare_sim(self.sim) # SEGFAULT ISSUE HERE
+            
             self._tensors = {
                 'root': gymtorch.wrap_tensor(self.gym.acquire_actor_root_state_tensor(self.sim)),
                 'rb_states': gymtorch.wrap_tensor(self.gym.acquire_rigid_body_state_tensor(self.sim)),
                 'net_cf': gymtorch.wrap_tensor(self.gym.acquire_net_contact_force_tensor(self.sim)),
                 'dof_states': gymtorch.wrap_tensor(self.gym.acquire_dof_state_tensor(self.sim))
             }
+           
             self._tensors.update({
                 'dof_targets': torch.zeros(n_dofs_sim, device=self.gpu_device, dtype=torch.float),
                 'dof_actuation_force': torch.zeros(n_dofs_sim, device=self.gpu_device, dtype=torch.float),
                 'forces': torch.zeros((self.n_envs, n_rbs_env, 3), device=self.gpu_device, dtype=torch.float),
                 'forces_pos': torch.zeros((self.n_envs, n_rbs_env, 3), device=self.gpu_device, dtype=torch.float)
             })
+            
             self._actor_idxs_to_update = {
                 'root': [],
                 'dof_states': [],
@@ -225,7 +231,7 @@ class GymScene:
     def get_asset(self, name, env_idx=0):
         return self._assets[env_idx][name]
 
-    def add_asset(self, name, asset, poses, collision_filter=0):
+    def add_asset(self, name, asset, poses, collision_filter=0, collision_group=None):
         assert not self._has_ran_setup
 
         env_idx = self._current_mutable_env_idx
@@ -240,7 +246,11 @@ class GymScene:
         else:
             pose = poses
 
-        ah = self.gym.create_actor(env_ptr, asset.GLOBAL_ASSET_CACHE[asset.asset_uid], pose, name, env_idx, collision_filter, self._seg_ids[env_idx])
+        if collision_group is None:
+            ah = self.gym.create_actor(env_ptr, asset.GLOBAL_ASSET_CACHE[asset.asset_uid], pose, name, env_idx, collision_filter, self._seg_ids[env_idx])
+        else:
+            ah = self.gym.create_actor(env_ptr, asset.GLOBAL_ASSET_CACHE[asset.asset_uid], pose, name, collision_group, collision_filter, self._seg_ids[env_idx])
+
         self.ah_map[env_idx][name] = ah
 
         asset.set_shape_props(env_idx, name)
@@ -418,13 +428,15 @@ class GymScene:
 
         while True:
             t_sim = t_step * self.dt
-
             if time_horizon is not None and t_step >= time_horizon:
                 break
 
             if policy is not None:
+                done = []
                 for env_idx in self.env_idxs:
-                    policy(self, env_idx, t_step, t_sim)
+                    done.append(policy(self, env_idx, t_step, t_sim))
+                if any(done):
+                    break
 
             self.step()
             self.render(custom_draws=custom_draws)
